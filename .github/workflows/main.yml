@@ -1,4 +1,4 @@
-name: Build FusionFall Retrobution Android POC4.6.1 Signed
+name: Build FusionFall Retrobution Android POC4.6.2 Signed
 
 on:
   workflow_dispatch:
@@ -1885,7 +1885,7 @@ jobs:
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            echo "Configure the four RETROBUTION_* repository secrets before building POC4.6.1."
+            echo "Configure the four RETROBUTION_* repository secrets before building POC4.6.2."
             exit 2
           fi
 
@@ -1928,34 +1928,58 @@ jobs:
       - name: Verify APK signature and certificate
         shell: bash
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           mkdir -p dist
           APK="$(find winlator-app/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
-          SIGNING_REPORT="dist/FusionFall-Retrobution-POC4.6.1-signing.txt"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$SIGNING_REPORT"
+          SIGNING_REPORT="dist/FusionFall-Retrobution-POC4.6.2-signing.txt"
 
-          # apksigner output differs by Build Tools version. Some versions print
-          # "Signer #1 certificate..." while others print "V2 Signer: certificate...".
-          # Extract the digest generically and verify the exact Retrobution release cert.
+          # The app's real minSdk is 26. Passing it explicitly avoids apksigner
+          # treating an absent v1/JAR signature as required on older Android APIs.
+          echo "Running cryptographic APK verification for minSdk 26..."
+          if ! "$APKSIGNER" verify --min-sdk-version 26 "$APK"; then
+            echo "::error::APK signature verification failed for Android API 26+."
+            "$APKSIGNER" verify --verbose --print-certs --min-sdk-version 26 "$APK" 2>&1 || true
+            exit 1
+          fi
+
+          # Generate a human-readable certificate report. Do not let this diagnostic
+          # command abort the job before we can validate the certificate ourselves.
+          set +e
+          "$APKSIGNER" verify --verbose --print-certs --min-sdk-version 26 "$APK" > "$SIGNING_REPORT" 2>&1
+          REPORT_STATUS=$?
+          set -e
+          cat "$SIGNING_REPORT"
+
           EXPECTED_CERT_SHA256="8cbcd76a1e1139ca1c763ee98f528b8e4a7790ed4806c2f441d110818694da0f"
-          ACTUAL_CERT_SHA256="$(awk '/certificate SHA-256 digest:/ {sub(/^.*certificate SHA-256 digest:[[:space:]]*/, "", $0); print tolower($0); exit}' "$SIGNING_REPORT" | tr -d ':[:space:]')"
+          ACTUAL_CERT_SHA256="$(sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+).*$/\1/p' "$SIGNING_REPORT" | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
 
           if [ -z "$ACTUAL_CERT_SHA256" ]; then
-            echo "ERROR: apksigner verified the APK but no certificate SHA-256 digest could be parsed." >&2
+            echo "::error::Could not parse the signer certificate SHA-256 digest from apksigner output."
             exit 1
           fi
 
           if [ "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]; then
-            echo "ERROR: APK is signed, but with an unexpected certificate." >&2
-            echo "Expected: $EXPECTED_CERT_SHA256" >&2
-            echo "Actual:   $ACTUAL_CERT_SHA256" >&2
+            echo "::error::APK was signed with an unexpected certificate."
+            echo "Expected: $EXPECTED_CERT_SHA256"
+            echo "Actual:   $ACTUAL_CERT_SHA256"
             exit 1
           fi
 
-          echo "Retrobution release certificate verified: $ACTUAL_CERT_SHA256"
+          # Require a modern signature scheme accepted by Android 8+ (our minSdk is 26).
+          if ! grep -Eq '^Verified using v(2|3|3\.1) scheme .*: true$' "$SIGNING_REPORT"; then
+            echo "::error::No verified APK Signature Scheme v2/v3/v3.1 was reported."
+            exit 1
+          fi
+
+          if [ "$REPORT_STATUS" -ne 0 ]; then
+            echo "::warning::Verbose apksigner report returned status $REPORT_STATUS, but the independent cryptographic verification passed and the Retrobution certificate matches."
+          fi
+
+          echo "Retrobution release APK verified successfully."
+          echo "Certificate SHA-256: $ACTUAL_CERT_SHA256"
 
       - name: Collect signed APK and checksum
         shell: bash
@@ -1963,18 +1987,18 @@ jobs:
           set -euxo pipefail
           APK="$(find winlator-app/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          cp "$APK" dist/FusionFall-Retrobution-POC4.6.1-signed.apk
-          sha256sum dist/FusionFall-Retrobution-POC4.6.1-signed.apk > dist/FusionFall-Retrobution-POC4.6.1-signed.apk.sha256
-          cat dist/FusionFall-Retrobution-POC4.6.1-signed.apk.sha256
+          cp "$APK" dist/FusionFall-Retrobution-POC4.6.2-signed.apk
+          sha256sum dist/FusionFall-Retrobution-POC4.6.2-signed.apk > dist/FusionFall-Retrobution-POC4.6.2-signed.apk.sha256
+          cat dist/FusionFall-Retrobution-POC4.6.2-signed.apk.sha256
           echo
-          cat dist/FusionFall-Retrobution-POC4.6.1-signing.txt
+          cat dist/FusionFall-Retrobution-POC4.6.2-signing.txt
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FusionFall-Retrobution-POC4.6.1-Signed
+          name: FusionFall-Retrobution-POC4.6.2-Signed
           path: |
-            dist/FusionFall-Retrobution-POC4.6.1-signed.apk
-            dist/FusionFall-Retrobution-POC4.6.1-signed.apk.sha256
-            dist/FusionFall-Retrobution-POC4.6.1-signing.txt
+            dist/FusionFall-Retrobution-POC4.6.2-signed.apk
+            dist/FusionFall-Retrobution-POC4.6.2-signed.apk.sha256
+            dist/FusionFall-Retrobution-POC4.6.2-signing.txt
           if-no-files-found: error
