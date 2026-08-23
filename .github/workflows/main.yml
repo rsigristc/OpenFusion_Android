@@ -1,4 +1,4 @@
-name: Build FusionFall Retrobution Android POC4.6 Signed
+name: Build FusionFall Retrobution Android POC4.6.1 Signed
 
 on:
   workflow_dispatch:
@@ -1885,7 +1885,7 @@ jobs:
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            echo "Configure the four RETROBUTION_* repository secrets before building POC4.6."
+            echo "Configure the four RETROBUTION_* repository secrets before building POC4.6.1."
             exit 2
           fi
 
@@ -1934,8 +1934,28 @@ jobs:
           test -n "$APK"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee dist/FusionFall-Retrobution-POC4.6-signing.txt
-          grep -q 'Signer #1 certificate SHA-256 digest:' dist/FusionFall-Retrobution-POC4.6-signing.txt
+          SIGNING_REPORT="dist/FusionFall-Retrobution-POC4.6.1-signing.txt"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$SIGNING_REPORT"
+
+          # apksigner output differs by Build Tools version. Some versions print
+          # "Signer #1 certificate..." while others print "V2 Signer: certificate...".
+          # Extract the digest generically and verify the exact Retrobution release cert.
+          EXPECTED_CERT_SHA256="8cbcd76a1e1139ca1c763ee98f528b8e4a7790ed4806c2f441d110818694da0f"
+          ACTUAL_CERT_SHA256="$(awk '/certificate SHA-256 digest:/ {sub(/^.*certificate SHA-256 digest:[[:space:]]*/, "", $0); print tolower($0); exit}' "$SIGNING_REPORT" | tr -d ':[:space:]')"
+
+          if [ -z "$ACTUAL_CERT_SHA256" ]; then
+            echo "ERROR: apksigner verified the APK but no certificate SHA-256 digest could be parsed." >&2
+            exit 1
+          fi
+
+          if [ "$ACTUAL_CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "ERROR: APK is signed, but with an unexpected certificate." >&2
+            echo "Expected: $EXPECTED_CERT_SHA256" >&2
+            echo "Actual:   $ACTUAL_CERT_SHA256" >&2
+            exit 1
+          fi
+
+          echo "Retrobution release certificate verified: $ACTUAL_CERT_SHA256"
 
       - name: Collect signed APK and checksum
         shell: bash
@@ -1943,18 +1963,18 @@ jobs:
           set -euxo pipefail
           APK="$(find winlator-app/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
-          cp "$APK" dist/FusionFall-Retrobution-POC4.6-signed.apk
-          sha256sum dist/FusionFall-Retrobution-POC4.6-signed.apk > dist/FusionFall-Retrobution-POC4.6-signed.apk.sha256
-          cat dist/FusionFall-Retrobution-POC4.6-signed.apk.sha256
+          cp "$APK" dist/FusionFall-Retrobution-POC4.6.1-signed.apk
+          sha256sum dist/FusionFall-Retrobution-POC4.6.1-signed.apk > dist/FusionFall-Retrobution-POC4.6.1-signed.apk.sha256
+          cat dist/FusionFall-Retrobution-POC4.6.1-signed.apk.sha256
           echo
-          cat dist/FusionFall-Retrobution-POC4.6-signing.txt
+          cat dist/FusionFall-Retrobution-POC4.6.1-signing.txt
 
       - name: Upload signed APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FusionFall-Retrobution-POC4.6-Signed
+          name: FusionFall-Retrobution-POC4.6.1-Signed
           path: |
-            dist/FusionFall-Retrobution-POC4.6-signed.apk
-            dist/FusionFall-Retrobution-POC4.6-signed.apk.sha256
-            dist/FusionFall-Retrobution-POC4.6-signing.txt
+            dist/FusionFall-Retrobution-POC4.6.1-signed.apk
+            dist/FusionFall-Retrobution-POC4.6.1-signed.apk.sha256
+            dist/FusionFall-Retrobution-POC4.6.1-signing.txt
           if-no-files-found: error
