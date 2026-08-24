@@ -13,12 +13,14 @@ The goal is not simply to run FusionFall on Android, but to progressively make t
 - Dedicated touchscreen camera control
 - Attack, Jump and Target buttons
 - Hold-to-attack support
+- Drag-to-aim camera control while holding ATK
 - Simultaneous movement + camera input
 - Gamepad support
 
 🧬 **Native Nano HUD Interaction**
 - The original FusionFall Nano HUD can now be touched directly
 - Nano slots automatically trigger the corresponding 1 / 2 / 3 game inputs
+- Nano touch zones realign after fold/unfold and extra-wide display changes
 - No additional Nano buttons are required for normal gameplay
 
 🖱️ **Gameplay / UI Modes**
@@ -29,7 +31,9 @@ The goal is not simply to run FusionFall on Android, but to progressively make t
 ⚡ **Android Performance Layer**
 - Controlled render loop to prevent the game from freezing while idle
 - 30 / 45 / 60 FPS profiles
+- Compatible and Unlocked profiles
 - 960×540, 1280×720 and 1600×900 profiles
+- Live frametime, average FPS, minimum FPS, 1% low and stutter metrics
 - Optimized rendering behavior for mobile devices
 
 🔐 **Android Login**
@@ -79,3 +83,4 @@ Special thanks to the OpenFusion, Retrobution and Winlator communities whose wor
 ---
 
 Feedback, device compatibility reports, gameplay videos and bug reports are very welcome.
+
