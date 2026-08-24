@@ -1,5 +1,11 @@
 # 📱 FusionFall Retrobution for Android
 
+## v0.5.0 Beta
+
+The project has reached its first public Android beta. Official APKs are published through
+[GitHub Releases](https://github.com/rsigristc/OpenFusion_Android/releases) with a SHA-256
+checksum and a persistent Android signing certificate.
+
 FusionFall Retrobution can now be played through a dedicated Android application with a mobile-focused interaction layer.
 
 This project adapts the PC version of FusionFall Retrobution to Android using a customized Winlator-based runtime, while replacing much of the traditional desktop interaction with controls designed specifically for touchscreens and gamepads.
@@ -42,6 +48,14 @@ The goal is not simply to run FusionFall on Android, but to progressively make t
 - Bounded lifecycle/session event history for troubleshooting fold, resume and input issues
 - Exportable text report with app-private Wine, Box64 and XServer logs when available
 - Automatic redaction of detected passwords, tokens, secrets and authorization values
+
+🔄 **Verified Updates (v0.5.0 Beta)**
+- Stable and Beta update channels
+- In-launcher changelog and update notification
+- APK download into the private Android cache
+- SHA-256 verification before opening the Android package installer
+- GitHub Release page fallback
+- Visible version, About, Credits and Licenses information
 
 🔐 **Android Login**
 - Native Android launcher
