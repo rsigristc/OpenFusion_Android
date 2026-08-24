@@ -1220,6 +1220,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.5.0-beta
+          target_commitish: v0.5.0-beta-releases
           name: FusionFall Retrobution Android v0.5.0 Beta
           prerelease: true
           make_latest: false
