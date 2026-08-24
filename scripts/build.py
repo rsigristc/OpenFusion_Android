@@ -7,6 +7,7 @@ import argparse
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -25,6 +26,12 @@ def run(command: list[str], *, cwd: Path | None = None) -> None:
     subprocess.run(command, cwd=cwd, check=True)
 
 
+def remove_readonly_file(function, path: str, _error) -> None:
+    """Allow a managed Git checkout to be replaced on Windows."""
+    os.chmod(path, stat.S_IWRITE)
+    function(path)
+
+
 def prepare_managed_directory(work_directory: Path) -> Path:
     work_directory = work_directory.resolve()
     source_directory = work_directory / "winlator-app"
@@ -36,7 +43,7 @@ def prepare_managed_directory(work_directory: Path) -> Path:
                 f"Refusing to replace {source_directory}: {marker.name} is missing. "
                 "Choose an empty --work-dir or remove it manually."
             )
-        shutil.rmtree(source_directory)
+        shutil.rmtree(source_directory, onerror=remove_readonly_file)
 
     work_directory.mkdir(parents=True, exist_ok=True)
     marker.write_text(
