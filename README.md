@@ -36,6 +36,13 @@ The goal is not simply to run FusionFall on Android, but to progressively make t
 - Live frametime, average FPS, minimum FPS, 1% low and stutter metrics
 - Optimized rendering behavior for mobile devices
 
+🩺 **Diagnostics (POC4.9.2)**
+- In-app summary of device, Android, SoC, renderer and display information
+- Current performance profile, resolution, FPS cap, memory and gamepad state
+- Bounded lifecycle/session event history for troubleshooting fold, resume and input issues
+- Exportable text report with app-private Wine, Box64 and XServer logs when available
+- Automatic redaction of detected passwords, tokens, secrets and authorization values
+
 🔐 **Android Login**
 - Native Android launcher
 - Remember username/password option
