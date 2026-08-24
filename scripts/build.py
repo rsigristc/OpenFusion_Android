@@ -71,7 +71,7 @@ def assemble_source(source_directory: Path) -> None:
         raise RuntimeError(f"Expected Winlator {WINLATOR_COMMIT}, received {actual_commit}")
 
     patch_from_source = Path(os.path.relpath(PATCH, source_directory))
-    run(["git", "apply", str(patch_from_source)], cwd=source_directory)
+    run(["git", "apply", "--recount", str(patch_from_source)], cwd=source_directory)
     shutil.copytree(OVERLAY, source_directory / "app", dirs_exist_ok=True)
 
 
