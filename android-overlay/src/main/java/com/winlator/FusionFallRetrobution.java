@@ -107,7 +107,7 @@ public final class FusionFallRetrobution {
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
 
-    // Explicit high-contrast launcher palette. Do not inherit Winlator/System theme
+    // Explicit high contrast launcher palette. Do not inherit Winlator/System theme
     // colors because the host can use a dark text appearance on a light AlertDialog.
     private static final int UI_BG = Color.rgb(255, 255, 255);
     private static final int UI_TEXT = Color.rgb(24, 31, 42);
@@ -185,9 +185,6 @@ public final class FusionFallRetrobution {
                 changed = true;
             }
 
-            // Winlator 11.x exposes HUD Mode, but keep this patch resilient to
-            // minor source changes by setting it reflectively. Ordinal 0 is
-            // DISABLED and ordinal 1 is SIMPLE in the audited snapshot.
             boolean showHud = activity.getSharedPreferences("fusionfall_retrobution", 0)
                     .getBoolean("show_performance_hud", false);
             try {
@@ -291,8 +288,6 @@ public final class FusionFallRetrobution {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(pad, pad / 2, pad, pad / 4);
         layout.setBackgroundColor(UI_BG);
-        // POC4.6.3: do not make the parent panel steal touch focus from EditTexts.
-        // The dialog window itself keeps the IME hidden until a field is touched.
         layout.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
 
         TextView title = new TextView(activity);
@@ -365,8 +360,6 @@ public final class FusionFallRetrobution {
         status.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         layout.addView(status);
 
-        // These flags live on the UI thread. Auto-login must never make the form
-        // appear frozen: fields remain editable and every tap gets visible feedback.
         final boolean[] loginInFlight = {false};
         final boolean[] suppressAutoLogin = {false};
         View.OnTouchListener manualInteraction = (view, event) -> {
@@ -442,8 +435,6 @@ public final class FusionFallRetrobution {
                 hideKeyboard(activity, password);
                 loginInFlight[0] = true;
                 play.setText(tr(activity, "CONECTANDO…", "CONNECTING…"));
-                // Do not disable the EditTexts. On some Samsung/Android builds the
-                // old auto-login path looked like a dead touch layer for up to 60 s.
                 username.setEnabled(true);
                 password.setEnabled(true);
                 status.setTextColor(UI_ACCENT);

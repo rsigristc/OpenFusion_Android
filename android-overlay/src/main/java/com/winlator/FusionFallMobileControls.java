@@ -1147,8 +1147,7 @@ public final class FusionFallMobileControls {
                     rebuild();
                 });
 
-                // Every action hidden from the permanent HUD is automatically
-                // available here. This is the core POC4.9.1 compact/full behavior.
+                // Every action hidden from the permanent HUD is automatically available here.
                 addHiddenActionsMenu(activity, panel, opacity);
             }
         }
@@ -1363,12 +1362,12 @@ public final class FusionFallMobileControls {
         int gameWidth = Math.max(1, hudRight - hudLeft);
         int gameHeight = Math.max(1, hudBottom - hudTop);
 
-        // Retrobution's three equipped-Nano caps sit at the extreme lower-right
+        // Retrobution's three equipped Nano caps sit at the extreme lower right
         // of the 16:9 game viewport. Ratios keep the hotspots aligned across the
         // 960x540 / 1280x720 / 1600x900 profiles and letterboxed Android screens.
         int slotWidth = Math.max(54, Math.round(gameWidth * 0.060f));
         // On the unfolded extra-wide surface the slots are visually closer to
-        // the bottom edge. A slightly shorter bottom-aligned target moves the
+        // the bottom edge. A slightly shorter bottom aligned target moves the
         // active area down without affecting phones using the normal viewport.
         float slotHeightRatio = stretchedWideSurface ? 0.090f : 0.105f;
         int slotHeight = Math.max(54, Math.round(gameHeight * slotHeightRatio));
@@ -1810,12 +1809,7 @@ public final class FusionFallMobileControls {
             synthetic.recycle();
         }
     }
-
-    /**
-     * POC4.7.6 live HUD bridge. Reflection is used to avoid a javac hard dependency
-     * on the patched XServerDisplayActivity, while the target method is kept from
-     * R8/ProGuard so the change still takes effect instantly in the current session.
-     */
+    
     private static void setPerformanceHudEnabled(Activity activity, boolean enabled) {
         if (activity == null || activity.isFinishing()) return;
         try {
@@ -2641,7 +2635,7 @@ public final class FusionFallMobileControls {
     }
 
     /**
-     * Transparent pass-through placed over FusionFall's native lower-right HUD.
+     * Transparent pass through placed over FusionFall's native lower-right HUD.
      * Gameplay camera input is excluded from this area. Taps are forwarded to the
      * stock TouchpadView with absolute cursor-to-touchpoint enabled for the gesture,
      * allowing Nano/interface controls to remain directly touchable.
