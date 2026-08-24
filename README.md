@@ -105,3 +105,13 @@ Special thanks to the OpenFusion, Retrobution and Winlator communities whose wor
 
 Feedback, device compatibility reports, gameplay videos and bug reports are very welcome.
 
+## ☕ Support Development
+
+FusionFall Retrobution Android is developed and maintained as an independent community
+project. If you enjoy the Android port and would like to help fund continued development,
+device testing and release infrastructure, you can support the project through Ko-fi.
+
+[![Support the project on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rodrigosigrist)
+
+Support is entirely optional. Downloads and project features remain publicly available.
+
