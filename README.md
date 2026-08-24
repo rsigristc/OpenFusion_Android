@@ -10,8 +10,8 @@ OpenFusion Android is an open-source Android adaptation of FusionFall built on a
 touch and gamepad controls, Fold-aware HUD interaction, lifecycle recovery, diagnostics and
 verified in-app updates.
 
-The source used to build every APK is visible directly in this repository. There are no
-Base64 source archives or generated source blobs in the workflow.
+The source used to build v0.5.1 Beta and future APKs is visible directly in this repository.
+There are no Base64 source archives or generated source blobs in the workflow.
 
 ## Server scope
 
