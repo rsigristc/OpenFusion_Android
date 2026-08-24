@@ -33,6 +33,7 @@ class because that class presently contains Retrobution-specific integration.
 - [`.github/workflows/main.yml`](.github/workflows/main.yml) checks out this repository, fetches
   the pinned upstream Winlator commit, applies the public patch and copies the public overlay.
 - [`docs/BUILDING.md`](docs/BUILDING.md) documents how to reproduce a local build.
+- [`scripts/build.py`](scripts/build.py) is the single build entry point used locally and by CI.
 - [`NOTICE`](NOTICE) records upstream provenance, modifications and trademark disclaimers.
 
 The pinned upstream revision is

@@ -13,7 +13,6 @@ permissions:
   contents: write
 
 env:
-  WINLATOR_COMMIT: 4f55d117fff1542944e5b91f433470445160ce08
   ANDROID_NDK: '24.0.8215888'
   ANDROID_CMAKE: '3.22.1'
 
@@ -47,128 +46,8 @@ jobs:
             "ndk;${{ env.ANDROID_NDK }}" \
             "cmake;${{ env.ANDROID_CMAKE }}"
 
-      - name: Fetch audited Winlator snapshot
-        shell: bash
-        run: |
-          set -euxo pipefail
-          rm -rf winlator-app poc4 dist build.log
-          git init winlator-app
-          git -C winlator-app remote add origin https://github.com/brunodev85/winlator-app.git
-          git -C winlator-app fetch --depth=1 origin "${{ env.WINLATOR_COMMIT }}"
-          git -C winlator-app checkout --detach FETCH_HEAD
-          test "$(git -C winlator-app rev-parse HEAD)" = "${{ env.WINLATOR_COMMIT }}"
-
-      - name: Apply the public Winlator patch and Android source overlay
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git -C winlator-app apply --check ../patches/winlator-4f55d11.patch
-          git -C winlator-app apply ../patches/winlator-4f55d11.patch
-          cp -a android-overlay/. winlator-app/app/
-
-      - name: Verify v0.5.1 Beta releases & updater patch
-        shell: bash
-        run: |
-          set -euxo pipefail
-          test -s LICENSE
-          test -s NOTICE
-          test -s patches/winlator-4f55d11.patch
-          test -s android-overlay/src/main/java/com/winlator/FusionFallRetrobution.java
-          ! grep -q 'tarfile' .github/workflows/main.yml
-          git -C winlator-app diff --check
-          grep -q 'FusionFall Retrobution Android v0.5.1 Beta' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'v0.5.1 Beta Android updater-validation, diagnostics and controls layer' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'FusionFall Retrobution Android v0.5.1 Beta' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'fusionfall_force_fullscreen' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'fusionFallSetPerformanceHudEnabled' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'getMethod(' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q '@androidx.annotation.Keep' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'runOnUiThread' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'getRenderer().toggleFullscreen()' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          ! grep -q 'setForceWindowsFullscreen(true)' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q "applicationId 'com.winlator'" winlator-app/app/build.gradle
-          ! grep -q "applicationId 'com.retrobution.fusionfall.android'" winlator-app/app/build.gradle
-          grep -q 'versionCode 501' winlator-app/app/build.gradle
-          grep -q 'versionName "0.5.1-beta"' winlator-app/app/build.gradle
-          grep -q 'controlLabel(activity, "target")' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Action.KEY_Z' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KeyEvent.KEYCODE_Z' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'AndroidKeyStore' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'addNativeNanoHotspots' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'show_nano_shortcuts' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'auto_hide_touch_on_gamepad' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'camera_sensitivity_x' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'camera_sensitivity_y' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'joystick_mode' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Modo del joystick' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'JOY FIJO' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'HUD personalizable' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'PREF_LANGUAGE = "ui_language"' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'onSessionPause' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'onSessionResume' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'onSessionConfigurationChanged' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'onSessionWindowFocusChanged' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'DownloadProgressListener' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'Verificando SHA-256' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'progressBarStyleHorizontal' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'class UpdateProgress' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'path="fusionfall-updates/"' winlator-app/app/src/main/res/xml/fusionfall_file_paths.xml
-          grep -q 'REQUEST_INSTALL_PACKAGES' winlator-app/app/src/main/AndroidManifest.xml
-          grep -q 'SHA-256 mismatch' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'RELEASES_API' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'APP_VERSION = "0.5.1-beta"' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'xServer.injectPointerMove(xServer.screenInfo.width / 2' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'sendAttackAim(activityRef.get(), outX, outY)' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'fusionFallSendAttackAim' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          test -f winlator-app/app/src/main/res/xml/fusionfall_file_paths.xml
-          grep -q '\.fusionfall.files' winlator-app/app/src/main/AndroidManifest.xml
-          grep -q 'androidx.core.content.FileProvider' winlator-app/app/src/main/java/com/winlator/FusionFallDiagnostics.java
-          grep -q 'FusionFallDiagnostics.onRenderedFrame()' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'buildRuntimeDiagnostics' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'class FusionFallDiagnostics' winlator-app/app/src/main/java/com/winlator/FusionFallDiagnostics.java
-          grep -q 'AttackCameraDrag' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'stretchedWideSurface' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'stretchedWideSurface ? 0.090f : 0.105f' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'FRAME_SAMPLE_CAPACITY' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'nextRenderDeadlineNanos' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q '"unlocked".equals(profile)' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'FusionFallMobileControls.onRenderedFrame()' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'scheduleResumeRecovery' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'sessionPaused' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'FusionFallMobileControls.onSessionPause(this)' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'FusionFallMobileControls.onSessionResume(this)' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'FusionFallMobileControls.onSessionConfigurationChanged(this)' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'FusionFallMobileControls.onSessionWindowFocusChanged(this, true)' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'Idioma / Language' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Language / Idioma' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KEYBOARD' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Remember password and sign in automatically' winlator-app/app/src/main/java/com/winlator/FusionFallRetrobution.java
-          grep -q 'control_visible_' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'control_scale_' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'control_opacity_' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'COMPACTO' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'COMPLETO' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'GAMEPAD' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'addHiddenActionsMenu' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'HUD PROTEGIDO' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'OVERLAY_TAG + "_protected_"' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Action.KEY_I' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Action.KEY_J' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Action.KEY_P' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'Action.KEY_M' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'controlLabel(activity, "weapon")' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'controlLabel(activity, "nano_power")' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KeyEvent.KEYCODE_X' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KeyEvent.KEYCODE_I' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KeyEvent.KEYCODE_J' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KeyEvent.KEYCODE_P' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'KeyEvent.KEYCODE_M' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'EDITAR POSICIÓN DE CONTROLES' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'InputDeviceListener' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
-          grep -q 'android:roundIcon="@mipmap/ic_launcher_round"' winlator-app/app/src/main/AndroidManifest.xml
-          test -s winlator-app/app/src/main/res/drawable-nodpi/retrobution_icon_foreground.png
-
       - name: Prepare persistent Retrobution signing key
+        if: github.event_name != 'pull_request'
         shell: bash
         env:
           RETROBUTION_KEYSTORE_BASE64: ${{ secrets.RETROBUTION_KEYSTORE_BASE64 }}
@@ -196,7 +75,7 @@ jobs:
           keytool -list -keystore "$KS" -storepass "$RETROBUTION_KEYSTORE_PASSWORD" -alias "$RETROBUTION_KEY_ALIAS" >/dev/null
           echo "FUSIONFALL_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
 
-      - name: Build signed known-good debug runtime
+      - name: Build with the public developer script
         shell: bash
         env:
           FUSIONFALL_KEYSTORE_PASSWORD: ${{ secrets.RETROBUTION_KEYSTORE_PASSWORD }}
@@ -204,19 +83,16 @@ jobs:
           FUSIONFALL_KEY_PASSWORD: ${{ secrets.RETROBUTION_KEY_PASSWORD }}
         run: |
           set -uo pipefail
-          cd winlator-app
-          chmod +x gradlew
-          find app/src/main/res -type f -name "*.bak.fusionfall-poc4*" -print -delete || true
           set +e
-          ./gradlew --no-daemon --stacktrace :app:assembleDebug 2>&1 | tee ../build.log
+          python3 scripts/build.py --work-dir .build 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
             echo
             echo "================ APK BUILD ERROR SUMMARY ================"
-            grep -nEi 'error:|FAILURE:|Execution failed|Caused by:|cannot find symbol|incompatible types|expected|signing|AAPT|R8|ProGuard' ../build.log | tail -420 || true
+            grep -nEi 'error:|FAILURE:|Execution failed|Caused by:|cannot find symbol|incompatible types|expected|signing|AAPT|R8|ProGuard|BUILD FAILED' build.log | tail -420 || true
             echo "================ LAST 180 LOG LINES ======================"
-            tail -180 ../build.log || true
+            tail -180 build.log || true
             echo "==========================================================="
             exit "$status"
           fi
@@ -226,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK="$(find winlator-app/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
+          APK="$(find .build/winlator-app/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
 
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
@@ -244,13 +120,17 @@ jobs:
           EXPECTED_CERT_SHA256="8cbcd76a1e1139ca1c763ee98f528b8e4a7790ed4806c2f441d110818694da0f"
           ACTUAL_CERT_SHA256="$(sed -nE 's/^.*certificate SHA-256 digest:[[:space:]]*([0-9A-Fa-f:]+).*$/\1/p' "$SIGNING_REPORT" | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')"
           test -n "$ACTUAL_CERT_SHA256"
-          test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            test "$ACTUAL_CERT_SHA256" = "$EXPECTED_CERT_SHA256"
+          else
+            echo "Pull request build uses an ephemeral debug key: $ACTUAL_CERT_SHA256"
+          fi
 
       - name: Collect v0.5.1-beta APK
         shell: bash
         run: |
           set -euxo pipefail
-          APK="$(find winlator-app/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
+          APK="$(find .build/winlator-app/app/build/outputs/apk/debug -type f -name '*.apk' | head -n 1)"
           cp "$APK" dist/FusionFall-Retrobution-v0.5.1-beta.apk
           sha256sum dist/FusionFall-Retrobution-v0.5.1-beta.apk > dist/FusionFall-Retrobution-v0.5.1-beta.apk.sha256
           cat dist/FusionFall-Retrobution-v0.5.1-beta.apk.sha256
