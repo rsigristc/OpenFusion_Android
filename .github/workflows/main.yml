@@ -2,6 +2,9 @@ name: Build FusionFall Retrobution Android POC4.9.1 Performance, Frame Pacing & 
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - poc4.9.1-performance-controls
 
 permissions:
   contents: read
