@@ -1,0 +1,24 @@
+OpenFusion Android
+==================
+
+This repository contains modifications and additions for building an Android FusionFall client
+on top of Winlator.
+
+Upstream project: Winlator
+Upstream repository: https://github.com/brunodev85/winlator-app
+Pinned source revision: 4f55d117fff1542944e5b91f433470445160ce08
+Upstream license: GNU Lesser General Public License v2.1 or later
+
+The files under android-overlay/ were added by OpenFusion Android contributors. The file
+patches/winlator-4f55d11.patch records modifications to the pinned Winlator source. Modified
+files carry a notice identifying the OpenFusion Android changes and their date.
+
+The build downloads the official OpenFusion portable launcher at build/runtime setup time; that
+launcher is not vendored into this repository and is governed by its own licenses.
+
+FusionFall, Cartoon Network and related names and assets are the property of their respective
+owners. FusionFall Retrobution is a community server and is credited for the currently configured
+server API. This project is unofficial and is not endorsed by Cartoon Network, OpenFusion,
+Retrobution or the Winlator authors.
+
+No warranty is provided. See LICENSE for the complete license terms.
