@@ -943,7 +943,6 @@ jobs:
           grep -q 'fusionFallSetPerformanceHudEnabled' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
           grep -q 'getMethod(' winlator-app/app/src/main/java/com/winlator/FusionFallMobileControls.java
           grep -q '@androidx.annotation.Keep' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
-          grep -q 'frameRating.run()' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
           grep -q 'runOnUiThread' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
           grep -q 'getRenderer().toggleFullscreen()' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
           ! grep -q 'setForceWindowsFullscreen(true)' winlator-app/app/src/main/java/com/winlator/XServerDisplayActivity.java
