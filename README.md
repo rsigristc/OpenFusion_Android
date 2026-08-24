@@ -1,8 +1,8 @@
 # 📱 FusionFall Retrobution for Android
 
-## v0.5.0 Beta
+## v0.5.1 Beta
 
-The project has reached its first public Android beta. Official APKs are published through
+The project has reached its public Android beta phase. Official APKs are published through
 [GitHub Releases](https://github.com/rsigristc/OpenFusion_Android/releases) with a SHA-256
 checksum and a persistent Android signing certificate.
 
@@ -49,13 +49,14 @@ The goal is not simply to run FusionFall on Android, but to progressively make t
 - Exportable text report with app-private Wine, Box64 and XServer logs when available
 - Automatic redaction of detected passwords, tokens, secrets and authorization values
 
-🔄 **Verified Updates (v0.5.0 Beta)**
+🔄 **Verified Updates (v0.5.1 Beta)**
 - Stable and Beta update channels
 - In-launcher changelog and update notification
 - APK download into the private Android cache
 - SHA-256 verification before opening the Android package installer
 - GitHub Release page fallback
 - Visible version, About, Credits and Licenses information
+- End-to-end update path from v0.5.0 Beta to v0.5.1 Beta
 
 🔐 **Android Login**
 - Native Android launcher
