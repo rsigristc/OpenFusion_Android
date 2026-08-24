@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - poc4.9.1-performance-controls
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
