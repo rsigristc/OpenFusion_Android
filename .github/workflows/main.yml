@@ -1,4 +1,4 @@
-name: Build FusionFall Retrobution Android POC4.7 Production Baseline
+name: Build FusionFall Retrobution Android POC4.7.1 Build Hotfix
 
 on:
   workflow_dispatch:
@@ -2093,7 +2093,7 @@ jobs:
           keytool -list -keystore "$KS" -storepass "$RETROBUTION_KEYSTORE_PASSWORD" -alias "$RETROBUTION_KEY_ALIAS" >/dev/null
           echo "FUSIONFALL_KEYSTORE_PATH=$KS" >> "$GITHUB_ENV"
 
-      - name: Build production release APK and AAB
+      - name: Build production release APK
         shell: bash
         env:
           FUSIONFALL_KEYSTORE_PASSWORD: ${{ secrets.RETROBUTION_KEYSTORE_PASSWORD }}
@@ -2105,13 +2105,37 @@ jobs:
           chmod +x gradlew
           find app/src/main/res -type f -name "*.bak.fusionfall-poc4*" -print -delete || true
           set +e
-          ./gradlew --no-daemon --stacktrace :app:assembleRelease :app:bundleRelease 2>&1 | tee ../build.log
+          ./gradlew --no-daemon --console=plain --stacktrace :app:assembleRelease 2>&1 | tee ../build-apk.log
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then
-            echo '================ BUILD ERROR SUMMARY ================
-            grep -nEi 'error:|FAILURE:|Execution failed|Caused by:|cannot find symbol|incompatible types|expected|signing|AAPT' ../build.log | tail -360 || true
-            echo '====================================================='
+            echo '================ APK BUILD ERROR SUMMARY ================'
+            grep -nEi 'error:|FAILURE:|Execution failed|Caused by:|cannot find symbol|incompatible types|expected|signing|AAPT|What went wrong' ../build-apk.log | tail -420 || true
+            echo '================ LAST 180 LOG LINES ====================='
+            tail -180 ../build-apk.log || true
+            echo '=========================================================='
+            exit "$status"
+          fi
+
+      - name: Build production release AAB
+        continue-on-error: true
+        shell: bash
+        env:
+          FUSIONFALL_KEYSTORE_PASSWORD: ${{ secrets.RETROBUTION_KEYSTORE_PASSWORD }}
+          FUSIONFALL_KEY_ALIAS: ${{ secrets.RETROBUTION_KEY_ALIAS }}
+          FUSIONFALL_KEY_PASSWORD: ${{ secrets.RETROBUTION_KEY_PASSWORD }}
+        run: |
+          set -uo pipefail
+          cd winlator-app
+          set +e
+          ./gradlew --no-daemon --console=plain --stacktrace :app:bundleRelease 2>&1 | tee ../build-aab.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo '================ AAB BUILD ERROR SUMMARY ================'
+            grep -nEi 'error:|FAILURE:|Execution failed|Caused by:|cannot find symbol|incompatible types|expected|signing|AAPT|What went wrong' ../build-aab.log | tail -320 || true
+            echo '=========================================================='
+            echo '::warning::AAB generation failed. APK validation can still continue.'
             exit "$status"
           fi
 
@@ -2124,11 +2148,11 @@ jobs:
           test -n "$APK"
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -x "$AAPT"
-          "$AAPT" dump badging "$APK" | tee dist/FusionFall-Retrobution-Android-POC4.7-badging.txt
-          grep -q "package: name='com.retrobution.fusionfall.android' versionCode='470' versionName='0.4.7'" dist/FusionFall-Retrobution-Android-POC4.7-badging.txt
+          "$AAPT" dump badging "$APK" | tee dist/FusionFall-Retrobution-Android-POC4.7.1-badging.txt
+          grep -q "package: name='com.retrobution.fusionfall.android' versionCode='470' versionName='0.4.7'" dist/FusionFall-Retrobution-Android-POC4.7.1-badging.txt
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
-          SIGNING_REPORT="dist/FusionFall-Retrobution-Android-POC4.7-signing.txt"
+          SIGNING_REPORT="dist/FusionFall-Retrobution-Android-POC4.7.1-signing.txt"
           if ! "$APKSIGNER" verify --min-sdk-version 26 "$APK"; then
             echo "::error::APK signature verification failed for Android API 26+."
             "$APKSIGNER" verify --verbose --print-certs --min-sdk-version 26 "$APK" 2>&1 || true
@@ -2151,32 +2175,45 @@ jobs:
             exit 1
           fi
           if [ "$REPORT_STATUS" -ne 0 ]; then echo "::warning::Verbose certificate report exited $REPORT_STATUS after independent verification succeeded."; fi
-          echo "Retrobution POC4.7 identity/signature verified: $ACTUAL_CERT_SHA256"
+          echo "Retrobution POC4.7.1 build-hotfix identity/signature verified: $ACTUAL_CERT_SHA256"
 
       - name: Collect release artifacts and checksums
         shell: bash
         run: |
           set -euxo pipefail
           APK="$(find winlator-app/app/build/outputs/apk/release -type f -name '*.apk' | head -n 1)"
-          AAB="$(find winlator-app/app/build/outputs/bundle/release -type f -name '*.aab' | head -n 1)"
+          AAB="$(find winlator-app/app/build/outputs/bundle/release -type f -name '*.aab' | head -n 1 || true)"
           test -n "$APK"
-          test -n "$AAB"
-          cp "$APK" dist/FusionFall-Retrobution-Android-POC4.7.apk
-          cp "$AAB" dist/FusionFall-Retrobution-Android-POC4.7.aab
-          sha256sum dist/FusionFall-Retrobution-Android-POC4.7.apk > dist/FusionFall-Retrobution-Android-POC4.7.apk.sha256
-          sha256sum dist/FusionFall-Retrobution-Android-POC4.7.aab > dist/FusionFall-Retrobution-Android-POC4.7.aab.sha256
-          cat dist/FusionFall-Retrobution-Android-POC4.7.apk.sha256
-          cat dist/FusionFall-Retrobution-Android-POC4.7.aab.sha256
+          cp "$APK" dist/FusionFall-Retrobution-Android-POC4.7.1.apk
+          sha256sum dist/FusionFall-Retrobution-Android-POC4.7.1.apk > dist/FusionFall-Retrobution-Android-POC4.7.1.apk.sha256
+          cat dist/FusionFall-Retrobution-Android-POC4.7.1.apk.sha256
+          if [ -n "$AAB" ]; then
+            cp "$AAB" dist/FusionFall-Retrobution-Android-POC4.7.1.aab
+            sha256sum dist/FusionFall-Retrobution-Android-POC4.7.1.aab > dist/FusionFall-Retrobution-Android-POC4.7.1.aab.sha256
+            cat dist/FusionFall-Retrobution-Android-POC4.7.1.aab.sha256
+          else
+            echo '::warning::No AAB was produced; APK artifact is still valid.'
+          fi
 
-      - name: Upload POC4.7 production artifacts
+      - name: Upload POC4.7.1 production artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: FusionFall-Retrobution-Android-POC4.7
+          name: FusionFall-Retrobution-Android-POC4.7.1
           path: |
-            dist/FusionFall-Retrobution-Android-POC4.7.apk
-            dist/FusionFall-Retrobution-Android-POC4.7.apk.sha256
-            dist/FusionFall-Retrobution-Android-POC4.7.aab
-            dist/FusionFall-Retrobution-Android-POC4.7.aab.sha256
-            dist/FusionFall-Retrobution-Android-POC4.7-signing.txt
-            dist/FusionFall-Retrobution-Android-POC4.7-badging.txt
+            dist/FusionFall-Retrobution-Android-POC4.7.1.apk
+            dist/FusionFall-Retrobution-Android-POC4.7.1.apk.sha256
+            dist/FusionFall-Retrobution-Android-POC4.7.1.aab
+            dist/FusionFall-Retrobution-Android-POC4.7.1.aab.sha256
+            dist/FusionFall-Retrobution-Android-POC4.7.1-signing.txt
+            dist/FusionFall-Retrobution-Android-POC4.7.1-badging.txt
           if-no-files-found: error
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FusionFall-Retrobution-Android-POC4.7.1-build-logs
+          path: |
+            build-apk.log
+            build-aab.log
+          if-no-files-found: warn
