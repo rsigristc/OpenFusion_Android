@@ -76,7 +76,7 @@ FusionFall and related intellectual property belong to their respective owners. 
 community preservation project is not affiliated with or endorsed by Cartoon Network.
 
 Contributions, device reports and security reviews are welcome. See
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
 ## Support development
 
