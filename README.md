@@ -57,6 +57,7 @@ The goal is not simply to run FusionFall on Android, but to progressively make t
 - GitHub Release page fallback
 - Visible version, About, Credits and Licenses information
 - End-to-end update path from v0.5.0 Beta to v0.5.1 Beta
+- Visible download progress with percentage, downloaded MB and SHA-256 verification status
 
 🔐 **Android Login**
 - Native Android launcher
@@ -115,4 +116,3 @@ device testing and release infrastructure, you can support the project through K
 [![Support the project on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rodrigosigrist)
 
 Support is entirely optional. Downloads and project features remain publicly available.
-
