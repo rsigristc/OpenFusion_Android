@@ -1,3 +1,5 @@
+// Copyright 2026 OpenFusion Android contributors.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 package com.winlator;
 
 import android.app.AlertDialog;
@@ -26,6 +28,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.inputmethod.InputMethodManager;
@@ -69,7 +72,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * FusionFall Retrobution Android v0.5.0 Beta - Releases & Updater.
+ * FusionFall Retrobution Android v0.5.1 Beta - Updater Validation.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * Retrobution API authentication, retrieves the current build manifest, and then
@@ -90,8 +93,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PASSWORD_BLOB = "password_blob";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.0-beta";
-    public static final int APP_VERSION_CODE = 500;
+    public static final String APP_VERSION = "0.5.1-beta";
+    public static final int APP_VERSION_CODE = 501;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -302,7 +305,7 @@ public final class FusionFallRetrobution {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView server = new TextView(activity);
-        server.setText(API_HOST + "\n" + tr(activity, "FusionFall Retrobution Android v0.5.0 Beta", "FusionFall Retrobution Android v0.5.0 Beta"));
+        server.setText(API_HOST + "\n" + tr(activity, "FusionFall Retrobution Android v0.5.1 Beta", "FusionFall Retrobution Android v0.5.1 Beta"));
         server.setTextSize(14f);
         server.setTextColor(UI_SECONDARY);
         server.setPadding(0, pad / 4, 0, pad / 2);
@@ -407,7 +410,7 @@ public final class FusionFallRetrobution {
                     username.setHint(tr(activity, "Usuario", "Username"));
                     password.setHint(tr(activity, "Contraseña", "Password"));
                     rememberLogin.setText(tr(activity, "Recordar contraseña e iniciar sesión automáticamente", "Remember password and sign in automatically"));
-                    server.setText(API_HOST + "\nFusionFall Retrobution Android v0.5.0 Beta");
+                    server.setText(API_HOST + "\nFusionFall Retrobution Android v0.5.1 Beta");
                     settings.setText(tr(activity, "AJUSTES", "SETTINGS"));
                     exit.setText(tr(activity, "SALIR", "EXIT"));
                     if (!loginInFlight[0]) play.setText(tr(activity, "JUGAR", "PLAY"));
@@ -787,8 +790,7 @@ public final class FusionFallRetrobution {
     }
 
     private static void downloadAndInstall(Activity activity, UpdateInfo update) {
-        Toast.makeText(activity, tr(activity,
-                "Descargando actualización…", "Downloading update…"), Toast.LENGTH_LONG).show();
+        UpdateProgress progress = showUpdateProgress(activity, update);
         EXECUTOR.execute(() -> {
             try {
                 enforceHttps(update.apkUrl);
@@ -799,21 +801,98 @@ public final class FusionFallRetrobution {
                 File directory = new File(activity.getCacheDir(), "fusionfall-updates");
                 if (!directory.exists() && !directory.mkdirs()) throw new IOException("Could not create update cache");
                 File apk = new File(directory, "FusionFall-Retrobution-" + update.tag + ".apk");
-                download(update.apkUrl, apk);
+                download(update.apkUrl, apk, (downloaded, total) ->
+                        MAIN.post(() -> progress.setDownload(downloaded, total)));
+                MAIN.post(progress::setVerifying);
                 String actual = sha256(apk).toLowerCase(Locale.US);
                 if (!expected.equals(actual)) {
                     apk.delete();
                     throw new IOException("SHA-256 mismatch");
                 }
-                MAIN.post(() -> installVerifiedApk(activity, apk));
+                MAIN.post(() -> {
+                    progress.dismiss();
+                    installVerifiedApk(activity, apk);
+                });
             }
             catch (Exception error) {
                 Log.e(TAG, "Verified update download failed", error);
-                MAIN.post(() -> Toast.makeText(activity,
-                        tr(activity, "La actualización no superó la descarga/verificación.",
-                                "The update could not be downloaded or verified."), Toast.LENGTH_LONG).show());
+                MAIN.post(() -> {
+                    progress.dismiss();
+                    Toast.makeText(activity,
+                            tr(activity, "La actualización no superó la descarga/verificación.",
+                                    "The update could not be downloaded or verified."), Toast.LENGTH_LONG).show();
+                });
             }
         });
+    }
+
+    private static final class UpdateProgress {
+        final Activity activity;
+        final AlertDialog dialog;
+        final ProgressBar bar;
+        final TextView status;
+
+        UpdateProgress(Activity activity, AlertDialog dialog, ProgressBar bar, TextView status) {
+            this.activity = activity;
+            this.dialog = dialog;
+            this.bar = bar;
+            this.status = status;
+        }
+
+        void setDownload(long downloaded, long total) {
+            if (activity.isFinishing() || !dialog.isShowing()) return;
+            float downloadedMb = downloaded / (1024f * 1024f);
+            if (total > 0L) {
+                int percent = (int)Math.min(100L, downloaded * 100L / total);
+                bar.setIndeterminate(false);
+                bar.setProgress(percent);
+                status.setText(String.format(Locale.US,
+                        tr(activity, "%d%% · %.1f de %.1f MB", "%d%% · %.1f of %.1f MB"),
+                        percent, downloadedMb, total / (1024f * 1024f)));
+            }
+            else {
+                bar.setIndeterminate(true);
+                status.setText(String.format(Locale.US,
+                        tr(activity, "%.1f MB descargados", "%.1f MB downloaded"), downloadedMb));
+            }
+        }
+
+        void setVerifying() {
+            if (activity.isFinishing() || !dialog.isShowing()) return;
+            bar.setIndeterminate(true);
+            status.setText(tr(activity, "Verificando SHA-256…", "Verifying SHA-256…"));
+        }
+
+        void dismiss() {
+            if (dialog.isShowing()) dialog.dismiss();
+        }
+    }
+
+    private static UpdateProgress showUpdateProgress(Activity activity, UpdateInfo update) {
+        int pad = Math.max(16, Math.round(20f * activity.getResources().getDisplayMetrics().density));
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(pad, pad, pad, pad);
+        TextView status = new TextView(activity);
+        status.setText(tr(activity, "Conectando con GitHub Releases…", "Connecting to GitHub Releases…"));
+        status.setTextColor(UI_TEXT);
+        status.setTextSize(15f);
+        layout.addView(status);
+        ProgressBar bar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
+        bar.setMax(100);
+        bar.setIndeterminate(true);
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        barLp.topMargin = pad / 2;
+        layout.addView(bar, barLp);
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setTitle(tr(activity, "Descargando ", "Downloading ") + update.tag)
+                .setView(layout)
+                .create();
+        dialog.setCancelable(false);
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+        return new UpdateProgress(activity, dialog, bar, status);
     }
 
     private static void enforceHttps(String value) throws IOException {
@@ -893,7 +972,7 @@ public final class FusionFallRetrobution {
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(25000);
         conn.setRequestMethod(method);
-        conn.setRequestProperty("User-Agent", "FusionFall-Retrobution-Android/0.5.0-beta");
+        conn.setRequestProperty("User-Agent", "FusionFall-Retrobution-Android/0.5.1-beta");
         conn.setRequestProperty("Accept", "application/json, text/plain, */*");
         if (bearer != null && !bearer.isEmpty()) conn.setRequestProperty("Authorization", "Bearer " + bearer);
 
@@ -938,14 +1017,22 @@ public final class FusionFallRetrobution {
         return "No se pudo conectar: " + m;
     }
 
+    private interface DownloadProgressListener {
+        void onProgress(long downloaded, long total);
+    }
+
     private static void download(String url, File destination) throws IOException {
+        download(url, destination, null);
+    }
+
+    private static void download(String url, File destination, DownloadProgressListener listener) throws IOException {
         URL current = new URL(url);
         for (int redirects = 0; redirects < 10; redirects++) {
             if (!"https".equalsIgnoreCase(current.getProtocol())) throw new IOException("HTTPS required");
             HttpURLConnection conn = (HttpURLConnection) current.openConnection();
             conn.setConnectTimeout(30000);
             conn.setReadTimeout(120000);
-            conn.setRequestProperty("User-Agent", "FusionFall-Retrobution-Android/0.5.0-beta");
+            conn.setRequestProperty("User-Agent", "FusionFall-Retrobution-Android/0.5.1-beta");
             conn.setInstanceFollowRedirects(false);
             int code = conn.getResponseCode();
             if (code >= 300 && code < 400) {
@@ -961,11 +1048,21 @@ public final class FusionFallRetrobution {
             }
             File parent = destination.getParentFile();
             if (parent != null) parent.mkdirs();
+            long total = conn.getContentLengthLong();
             try (BufferedInputStream in = new BufferedInputStream(conn.getInputStream());
                  BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(destination))) {
                 byte[] buffer = new byte[128 * 1024];
                 int n;
-                while ((n = in.read(buffer)) >= 0) out.write(buffer, 0, n);
+                long downloaded = 0L;
+                long lastReport = 0L;
+                while ((n = in.read(buffer)) >= 0) {
+                    out.write(buffer, 0, n);
+                    downloaded += n;
+                    if (listener != null && (downloaded - lastReport >= 512L * 1024L || downloaded == total)) {
+                        lastReport = downloaded;
+                        listener.onProgress(downloaded, total);
+                    }
+                }
             }
             finally {
                 conn.disconnect();

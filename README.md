@@ -1,117 +1,87 @@
-# 📱 FusionFall Retrobution for Android
+# OpenFusion Android
 
-## v0.5.0 Beta
+> Current beta profile: **FusionFall Retrobution**
 
-The project has reached its first public Android beta. Official APKs are published through
-[GitHub Releases](https://github.com/rsigristc/OpenFusion_Android/releases) with a SHA-256
-checksum and a persistent Android signing certificate.
+[![License: LGPL v2.1 or later](https://img.shields.io/badge/License-LGPL_v2.1_or_later-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/rsigristc/OpenFusion_Android?include_prereleases)](https://github.com/rsigristc/OpenFusion_Android/releases)
 
-FusionFall Retrobution can now be played through a dedicated Android application with a mobile-focused interaction layer.
+OpenFusion Android is an open-source Android adaptation of FusionFall built on a pinned
+[Winlator](https://github.com/brunodev85/winlator-app) revision. It adds a native launcher,
+touch and gamepad controls, Fold-aware HUD interaction, lifecycle recovery, diagnostics and
+verified in-app updates.
 
-This project adapts the PC version of FusionFall Retrobution to Android using a customized Winlator-based runtime, while replacing much of the traditional desktop interaction with controls designed specifically for touchscreens and gamepads.
+The source used to build every APK is visible directly in this repository. There are no
+Base64 source archives or generated source blobs in the workflow.
 
-The goal is not simply to run FusionFall on Android, but to progressively make the experience feel like a proper mobile port.
+## Server scope
 
-## ✨ Current Features
+The current beta is configured specifically for **FusionFall Retrobution** at
+`api.ffretrobution.net`. Its login and game-version discovery use Retrobution's API contract,
+so the current APK is not a drop-in client for every OpenFusion server.
 
-🎮 **Mobile Controls**
-- Virtual movement joystick
-- Dedicated touchscreen camera control
-- Attack, Jump and Target buttons
-- Hold-to-attack support
-- Drag-to-aim camera control while holding ATK
-- Simultaneous movement + camera input
-- Gamepad support
+Most of the Android runtime, controls, HUD and diagnostics code is server-independent and can
+be adapted to another server profile. Separating server configuration and authentication into
+replaceable profiles is a future goal. The Retrobution name remains in the current launcher
+class because that class presently contains Retrobution-specific integration.
 
-🧬 **Native Nano HUD Interaction**
-- The original FusionFall Nano HUD can now be touched directly
-- Nano slots automatically trigger the corresponding 1 / 2 / 3 game inputs
-- Nano touch zones realign after fold/unfold and extra-wide display changes
-- No additional Nano buttons are required for normal gameplay
+## Source layout
 
-🖱️ **Gameplay / UI Modes**
-- Gameplay mode optimized for movement and camera control
-- UI mode for menus and traditional mouse-style interaction
-- Android keyboard access when text input is required
+- [`android-overlay/`](android-overlay/) contains the Android Java sources and resources added
+  by this project. These files are directly browsable and reviewable.
+- [`patches/winlator-4f55d11.patch`](patches/winlator-4f55d11.patch) is a standard Git patch for
+  the small set of existing Winlator files that must be modified.
+- [`.github/workflows/main.yml`](.github/workflows/main.yml) checks out this repository, fetches
+  the pinned upstream Winlator commit, applies the public patch and copies the public overlay.
+- [`docs/BUILDING.md`](docs/BUILDING.md) documents how to reproduce a local build.
+- [`NOTICE`](NOTICE) records upstream provenance, modifications and trademark disclaimers.
 
-⚡ **Android Performance Layer**
-- Controlled render loop to prevent the game from freezing while idle
-- 30 / 45 / 60 FPS profiles
-- Compatible and Unlocked profiles
-- 960×540, 1280×720 and 1600×900 profiles
+The pinned upstream revision is
+[`4f55d117fff1542944e5b91f433470445160ce08`](https://github.com/brunodev85/winlator-app/commit/4f55d117fff1542944e5b91f433470445160ce08).
+Pinning the exact revision makes the patch deterministic and the resulting source auditable.
+
+## Current features
+
+- Native bilingual Android launcher and encrypted credentials using Android Keystore + AES-GCM
+- Touch movement, camera, attack, jump, target and native Nano HUD interaction
+- Drag-to-aim while holding ATK, without resizing the guest window
+- Gamepad support and automatic touch-HUD behavior
+- Fold/unfold, pause/resume and fullscreen recovery
+- 30 / 45 / 60 FPS and unlocked performance profiles
 - Live frametime, average FPS, minimum FPS, 1% low and stutter metrics
-- Optimized rendering behavior for mobile devices
+- Exportable diagnostics with credential and token redaction
+- Stable/Beta update channels with HTTPS, SHA-256 verification and visible progress
+- Persistent Android signing identity for upgrade-compatible releases
 
-🩺 **Diagnostics (POC4.9.2)**
-- In-app summary of device, Android, SoC, renderer and display information
-- Current performance profile, resolution, FPS cap, memory and gamepad state
-- Bounded lifecycle/session event history for troubleshooting fold, resume and input issues
-- Exportable text report with app-private Wine, Box64 and XServer logs when available
-- Automatic redaction of detected passwords, tokens, secrets and authorization values
+## Building
 
-🔄 **Verified Updates (v0.5.0 Beta)**
-- Stable and Beta update channels
-- In-launcher changelog and update notification
-- APK download into the private Android cache
-- SHA-256 verification before opening the Android package installer
-- GitHub Release page fallback
-- Visible version, About, Credits and Licenses information
+See [Building from source](docs/BUILDING.md). A local debug build does not require the private
+release-signing key. Official releases are signed by GitHub Actions using encrypted repository
+secrets; the keystore itself is never committed.
 
-🔐 **Android Login**
-- Native Android launcher
-- Remember username/password option
-- Automatic login
-- Passwords are encrypted using Android Keystore + AES-GCM
-- Retrobution server configuration is integrated directly into the application
+## Releases and verification
 
-📦 **Signed Android Builds**
-- APK releases now use a persistent RSA-4096 release signing certificate
-- Future versions can be installed as updates without reinstalling the application
-- Custom Retrobution Android launcher icon
+Official APKs are published through [GitHub Releases](https://github.com/rsigristc/OpenFusion_Android/releases).
+Each release includes the APK, its SHA-256 checksum, Android package/version metadata and the
+public signing-certificate digest.
 
-## 🌐 Server
+## License and attribution
 
-This Android build currently targets:
+This derivative is distributed under the **GNU Lesser General Public License, version 2.1 or
+later**, consistent with the pinned Winlator source. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-**FusionFall Retrobution**  
-`api.ffretrobution.net`
+The downloaded OpenFusion game launcher/runtime is not stored in this repository and remains
+subject to its own project and dependency licenses.
 
-## 🚧 Development Status
+FusionFall and related intellectual property belong to their respective owners. This unofficial
+community preservation project is not affiliated with or endorsed by Cartoon Network.
 
-The Android client is still under active development.
+Contributions, device reports and security reviews are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
-The current POC series focuses on:
+## Support development
 
-- touchscreen usability
-- Android compatibility
-- gamepad support
-- performance and frame pacing
-- native Android launcher integration
-- reducing dependency on desktop-style mouse interaction
-- progressively hiding the underlying compatibility layer from the user
-
-Future versions will continue moving toward a more native Android experience.
-
-## ❤️ Community Project
-
-This is an unofficial community project created for preservation, experimentation and accessibility.
-
-FusionFall and related intellectual property belong to their respective owners.  
-This project is not affiliated with or endorsed by Cartoon Network.
-
-Special thanks to the OpenFusion, Retrobution and Winlator communities whose work makes projects like this possible.
-
----
-
-Feedback, device compatibility reports, gameplay videos and bug reports are very welcome.
-
-## ☕ Support Development
-
-FusionFall Retrobution Android is developed and maintained as an independent community
-project. If you enjoy the Android port and would like to help fund continued development,
-device testing and release infrastructure, you can support the project through Ko-fi.
+If you would like to help fund development, device testing and release infrastructure, you can
+support the project through Ko-fi. Support is optional; source code, downloads and project
+features remain publicly available.
 
 [![Support the project on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rodrigosigrist)
-
-Support is entirely optional. Downloads and project features remain publicly available.
-

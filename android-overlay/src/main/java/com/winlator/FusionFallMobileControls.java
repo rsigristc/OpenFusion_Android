@@ -1,3 +1,5 @@
+// Copyright 2026 OpenFusion Android contributors.
+// SPDX-License-Identifier: LGPL-2.1-or-later
 package com.winlator;
 
 import android.app.Activity;
@@ -40,7 +42,7 @@ import java.util.WeakHashMap;
 import java.util.Locale;
 
 /**
- * v0.5.0 Beta Android releases, diagnostics and controls layer for FusionFall Retrobution.
+ * v0.5.1 Beta Android updater-validation, diagnostics and controls layer for FusionFall Retrobution.
  *
  * The Windows/Unity client is untouched. This class sits above XServerView and
  * converts Android touch/gamepad input to the keyboard/mouse events the legacy
@@ -2101,7 +2103,7 @@ public final class FusionFallMobileControls {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(activity);
-        title.setText("FusionFall Retrobution · v0.5.0 Beta");
+        title.setText("FusionFall Retrobution · v0.5.1 Beta");
         title.setTextSize(22f);
         title.setTextColor(UI_TEXT);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
