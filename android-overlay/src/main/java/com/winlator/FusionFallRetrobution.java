@@ -4,6 +4,7 @@ package com.winlator;
 
 import android.app.AlertDialog;
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -29,6 +30,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.ArrayAdapter;
 import android.widget.TextView;
@@ -74,7 +76,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.2 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.3 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -99,11 +101,13 @@ public final class FusionFallRetrobution {
     private static final String CREDENTIAL_KEY_ALIAS = "fusionfall_retrobution_login_v1";
     private static final String PREF_USERNAME = "username";
     private static final String PREF_REMEMBER_LOGIN = "remember_login";
+    private static final String PREF_AUTO_LOGIN = "auto_login";
     private static final String PREF_PASSWORD_BLOB = "password_blob";
+    private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.2-beta";
-    public static final int APP_VERSION_CODE = 502;
+    public static final String APP_VERSION = "0.5.3-beta";
+    public static final int APP_VERSION_CODE = 503;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -113,6 +117,7 @@ public final class FusionFallRetrobution {
     private static final long ROOTFS_POLL_MS = 1500L;
     private static final long ROOTFS_TIMEOUT_MS = 10L * 60L * 1000L;
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
+    private static final ExecutorService STATUS_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
 
@@ -487,7 +492,9 @@ public final class FusionFallRetrobution {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView server = new TextView(activity);
-        server.setText(serverSummary(activity) + "\nOpenFusion Android v" + APP_VERSION);
+        server.setText(serverSummary(activity) + "\n" +
+                tr(activity, "Consultando estado del servidor…", "Checking server status…") +
+                "\nOpenFusion Android v" + APP_VERSION);
         server.setTextSize(14f);
         server.setTextColor(UI_SECONDARY);
         server.setPadding(0, pad / 4, 0, pad / 2);
@@ -526,18 +533,48 @@ public final class FusionFallRetrobution {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         CheckBox rememberLogin = new CheckBox(activity);
-        rememberLogin.setText(tr(activity, "Recordar contraseña e iniciar sesión automáticamente", "Remember password and sign in automatically"));
+        rememberLogin.setText(tr(activity, "Recordar contraseña", "Remember password"));
         rememberLogin.setTextColor(UI_TEXT);
         rememberLogin.setTextSize(14f);
         String savedPassword = loadSavedPassword(activity);
         boolean hasSavedLogin = prefs.getBoolean(credentialPreferenceKey(activity, PREF_REMEMBER_LOGIN), false) && savedPassword != null;
         rememberLogin.setChecked(hasSavedLogin);
         if (hasSavedLogin) password.setText(savedPassword);
-        rememberLogin.setContentDescription(tr(activity, "Recordar contraseña y activar inicio de sesión automático", "Remember password and enable automatic sign-in"));
+        rememberLogin.setContentDescription(tr(activity, "Guardar la contraseña de forma protegida", "Store the password securely"));
         layout.addView(rememberLogin);
+
+        CheckBox autoLogin = new CheckBox(activity);
+        autoLogin.setText(tr(activity, "Iniciar sesión automáticamente", "Sign in automatically"));
+        autoLogin.setTextColor(UI_TEXT);
+        autoLogin.setTextSize(14f);
+        autoLogin.setEnabled(hasSavedLogin);
+        autoLogin.setChecked(hasSavedLogin && autoLoginEnabled(activity));
+        autoLogin.setContentDescription(tr(activity, "Entrar automáticamente al abrir la aplicación", "Sign in automatically when the app opens"));
+        layout.addView(autoLogin);
         rememberLogin.setOnCheckedChangeListener((buttonView, checked) -> {
-            if (!checked) clearSavedCredentials(activity, true);
+            autoLogin.setEnabled(checked);
+            if (!checked) {
+                autoLogin.setChecked(false);
+                clearSavedCredentials(activity, true);
+            }
         });
+        autoLogin.setOnCheckedChangeListener((buttonView, checked) -> prefs.edit()
+                .putBoolean(credentialPreferenceKey(activity, PREF_AUTO_LOGIN), checked)
+                .apply());
+
+        LinearLayout accountActions = new LinearLayout(activity);
+        accountActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button register = new Button(activity);
+        register.setText(tr(activity, "REGISTRARSE", "REGISTER"));
+        register.setTextColor(UI_ACCENT);
+        register.setTextSize(12f);
+        Button forgot = new Button(activity);
+        forgot.setText(tr(activity, "RECUPERAR CONTRASEÑA", "FORGOT PASSWORD"));
+        forgot.setTextColor(UI_ACCENT);
+        forgot.setTextSize(12f);
+        accountActions.addView(register, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        accountActions.addView(forgot, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        layout.addView(accountActions);
 
         TextView status = new TextView(activity);
         status.setText(tr(activity, "Listo para conectar con el servidor.", "Ready to connect to the server."));
@@ -558,9 +595,14 @@ public final class FusionFallRetrobution {
         username.setOnTouchListener(manualInteraction);
         password.setOnTouchListener(manualInteraction);
         rememberLogin.setOnTouchListener(manualInteraction);
+        autoLogin.setOnTouchListener(manualInteraction);
+
+        ScrollView scroll = new ScrollView(activity);
+        scroll.setFillViewport(true);
+        scroll.addView(layout);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setView(layout)
+                .setView(scroll)
                 .setPositiveButton(tr(activity, "Jugar", "Play"), null)
                 .setNeutralButton(tr(activity, "Ajustes", "Settings"), null)
                 .setNegativeButton(tr(activity, "Salir", "Exit"), (d, which) -> activity.finish())
@@ -581,6 +623,15 @@ public final class FusionFallRetrobution {
             settings.setTextColor(UI_ACCENT);
             exit.setTextColor(UI_ACCENT);
             play.setTextColor(UI_ACCENT);
+            register.setOnClickListener(v -> {
+                suppressAutoLogin[0] = true;
+                showRegistrationDialog(activity);
+            });
+            forgot.setOnClickListener(v -> {
+                suppressAutoLogin[0] = true;
+                showPasswordRecoveryDialog(activity);
+            });
+            refreshServerStatus(activity, server);
 
             settings.setOnClickListener(v -> {
                 suppressAutoLogin[0] = true;
@@ -589,13 +640,17 @@ public final class FusionFallRetrobution {
                     FusionFallMobileControls.LaunchConfig config = FusionFallMobileControls.getLaunchConfig(activity);
                     username.setHint(tr(activity, "Usuario", "Username"));
                     password.setHint(tr(activity, "Contraseña", "Password"));
-                    rememberLogin.setText(tr(activity, "Recordar contraseña e iniciar sesión automáticamente", "Remember password and sign in automatically"));
-                    server.setText(serverSummary(activity) + "\nOpenFusion Android v" + APP_VERSION);
+                    rememberLogin.setText(tr(activity, "Recordar contraseña", "Remember password"));
+                    autoLogin.setText(tr(activity, "Iniciar sesión automáticamente", "Sign in automatically"));
+                    register.setText(tr(activity, "REGISTRARSE", "REGISTER"));
+                    forgot.setText(tr(activity, "RECUPERAR CONTRASEÑA", "FORGOT PASSWORD"));
                     username.setText(prefs.getString(credentialPreferenceKey(activity, PREF_USERNAME), ""));
                     String profilePassword = loadSavedPassword(activity);
                     boolean profileRemembered = prefs.getBoolean(
                             credentialPreferenceKey(activity, PREF_REMEMBER_LOGIN), false) && profilePassword != null;
                     rememberLogin.setChecked(profileRemembered);
+                    autoLogin.setEnabled(profileRemembered);
+                    autoLogin.setChecked(profileRemembered && autoLoginEnabled(activity));
                     password.setText(profileRemembered ? profilePassword : "");
                     settings.setText(tr(activity, "AJUSTES", "SETTINGS"));
                     exit.setText(tr(activity, "SALIR", "EXIT"));
@@ -604,6 +659,7 @@ public final class FusionFallRetrobution {
                     status.setText(tr(activity, "Perfil: ", "Profile: ") + config.profile + " · " + config.screenSize() +
                             (config.fpsCap > 0 ? " · " + config.fpsCap + " FPS" : tr(activity, " · FPS actual", " · current FPS")));
                     applyLaunchSettings(activity, container);
+                    refreshServerStatus(activity, server);
                 });
             });
 
@@ -620,6 +676,7 @@ public final class FusionFallRetrobution {
                 String user = username.getText().toString().trim();
                 String pass = password.getText().toString();
                 final boolean remember = rememberLogin.isChecked();
+                final boolean automatic = remember && autoLogin.isChecked();
                 if (user.isEmpty() || pass.isEmpty()) {
                     status.setTextColor(UI_ERROR);
                     status.setText(tr(activity, "Ingresa usuario y contraseña.", "Enter username and password."));
@@ -637,7 +694,7 @@ public final class FusionFallRetrobution {
                 EXECUTOR.execute(() -> {
                     try {
                         LaunchData data = authenticateAndPrepare(activity, user, pass, container);
-                        if (remember) saveCredentials(activity, user, pass);
+                        if (remember) saveCredentials(activity, user, pass, automatic);
                         else clearSavedCredentials(activity, true);
                         MAIN.post(() -> {
                             if (activity.isFinishing()) return;
@@ -663,7 +720,7 @@ public final class FusionFallRetrobution {
                 });
             });
 
-            if (hasSavedLogin && !username.getText().toString().trim().isEmpty() &&
+            if (hasSavedLogin && autoLogin.isChecked() && !username.getText().toString().trim().isEmpty() &&
                     !password.getText().toString().isEmpty()) {
                 status.setTextColor(UI_ACCENT);
                 status.setText(tr(activity, "Credenciales protegidas cargadas · inicio automático en 1 s…", "Protected credentials loaded · automatic sign-in in 1 s…"));
@@ -682,7 +739,273 @@ public final class FusionFallRetrobution {
         MAIN.postDelayed(() -> checkForUpdates(activity, false), 1800L);
     }
 
-    private static void saveCredentials(Context context, String username, String password) {
+    private static void refreshServerStatus(Activity activity, TextView serverView) {
+        ServerProfile profile = serverProfile(activity);
+        serverView.setText(profile.name + "\n" +
+                tr(activity, "Consultando estado del servidor…", "Checking server status…") +
+                "\nOpenFusion Android v" + APP_VERSION);
+        STATUS_EXECUTOR.execute(() -> {
+            try {
+                JSONObject info = getJson(profile.apiBase + "/");
+                JSONObject live = getJson(profile.apiBase + "/status");
+                String versionId = info.optString("game_version", "");
+                JSONArray versions = info.optJSONArray("game_versions");
+                if (versions != null && versions.length() > 0) versionId = versions.optString(0, versionId);
+                String versionName = versionId;
+                if (!versionId.isEmpty()) {
+                    try {
+                        versionName = getJson(profile.apiBase + "/versions/" + versionId).optString("name", versionId);
+                    }
+                    catch (IOException first) {
+                        versionName = getJson(profile.apiBase + "/versions/" + versionId + ".json").optString("name", versionId);
+                    }
+                }
+                final String displayName = info.optString("server_name", profile.name);
+                final String displayVersion = versionName.isEmpty() ? tr(activity, "No informada", "Not reported") : versionName;
+                final int players = live.optInt("player_count", 0);
+                MAIN.post(() -> {
+                    if (activity.isFinishing() || !profile.apiBase.equals(serverProfile(activity).apiBase)) return;
+                    serverView.setText(displayName + "\n" +
+                            tr(activity, "Versión del juego: ", "Game version: ") + displayVersion + "\n" +
+                            tr(activity, "Estado: EN LÍNEA · Jugadores: ", "Status: ONLINE · Players: ") + players +
+                            "\nOpenFusion Android v" + APP_VERSION);
+                    serverView.setTextColor(UI_SECONDARY);
+                });
+            }
+            catch (Exception error) {
+                Log.w(TAG, "Could not refresh server status", error);
+                MAIN.post(() -> {
+                    if (activity.isFinishing() || !profile.apiBase.equals(serverProfile(activity).apiBase)) return;
+                    serverView.setText(profile.name + "\n" +
+                            tr(activity, "Estado no disponible", "Status unavailable") +
+                            "\nOpenFusion Android v" + APP_VERSION);
+                    serverView.setTextColor(UI_ERROR);
+                });
+            }
+        });
+    }
+
+    private static EditText accountInput(Activity activity, String esHint, String enHint, boolean secret) {
+        EditText input = new EditText(activity);
+        input.setHint(tr(activity, esHint, enHint));
+        input.setTextColor(UI_TEXT);
+        input.setHintTextColor(UI_HINT);
+        input.setSingleLine(true);
+        input.setTextSize(16f);
+        input.setInputType(secret ?
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD :
+                InputType.TYPE_CLASS_TEXT);
+        return input;
+    }
+
+    private static TextView accountTitle(Activity activity, String es, String en) {
+        TextView title = new TextView(activity);
+        title.setText(tr(activity, es, en));
+        title.setTextColor(UI_TEXT);
+        title.setTextSize(22f);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        return title;
+    }
+
+    private static void showRegistrationDialog(Activity activity) {
+        int pad = Math.max(16, Math.round(20f * activity.getResources().getDisplayMetrics().density));
+        LinearLayout form = new LinearLayout(activity);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(pad, pad / 2, pad, pad / 2);
+        form.setBackgroundColor(UI_BG);
+        form.addView(accountTitle(activity, "Crear cuenta", "Create account"));
+
+        TextView server = new TextView(activity);
+        server.setText(serverProfile(activity).name);
+        server.setTextColor(UI_SECONDARY);
+        server.setPadding(0, pad / 4, 0, pad / 4);
+        form.addView(server);
+
+        EditText username = accountInput(activity, "Usuario (4–32: letras, números, - o _)",
+                "Username (4–32: letters, numbers, - or _)", false);
+        EditText password = accountInput(activity, "Contraseña (8–32 caracteres)",
+                "Password (8–32 characters)", true);
+        EditText confirm = accountInput(activity, "Confirmar contraseña", "Confirm password", true);
+        EditText email = accountInput(activity, "Correo electrónico (opcional)", "Email (optional)", false);
+        email.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        form.addView(username);
+        form.addView(password);
+        form.addView(confirm);
+        form.addView(email);
+
+        TextView note = new TextView(activity);
+        note.setText(tr(activity,
+                "El correo permite verificar la cuenta y recuperar la contraseña. Algunos servidores pueden exigirlo.",
+                "Email enables account verification and password recovery. Some servers may require it."));
+        note.setTextColor(UI_SECONDARY);
+        note.setTextSize(13f);
+        note.setPadding(0, pad / 4, 0, pad / 4);
+        form.addView(note);
+
+        TextView status = new TextView(activity);
+        status.setTextColor(UI_SECONDARY);
+        status.setTextSize(13f);
+        form.addView(status);
+
+        ScrollView scroll = new ScrollView(activity);
+        scroll.addView(form);
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setView(scroll)
+                .setNegativeButton(tr(activity, "Cancelar", "Cancel"), null)
+                .setPositiveButton(tr(activity, "Registrar", "Register"), null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(UI_BG));
+            Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            Button submit = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            cancel.setTextColor(UI_ACCENT);
+            submit.setTextColor(UI_ACCENT);
+            submit.setOnClickListener(v -> {
+                String user = username.getText().toString().trim();
+                String pass = password.getText().toString();
+                String repeated = confirm.getText().toString();
+                String address = email.getText().toString().trim();
+                if (!user.matches("[A-Za-z0-9_-]{4,32}")) {
+                    status.setTextColor(UI_ERROR);
+                    status.setText(tr(activity, "El usuario no cumple el formato requerido.", "The username does not match the required format."));
+                    return;
+                }
+                if (pass.length() < 8 || pass.length() > 32) {
+                    status.setTextColor(UI_ERROR);
+                    status.setText(tr(activity, "La contraseña debe tener entre 8 y 32 caracteres.", "The password must be 8–32 characters long."));
+                    return;
+                }
+                if (!pass.equals(repeated)) {
+                    status.setTextColor(UI_ERROR);
+                    status.setText(tr(activity, "Las contraseñas no coinciden.", "Passwords do not match."));
+                    return;
+                }
+                if (!address.isEmpty() && !android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+                    status.setTextColor(UI_ERROR);
+                    status.setText(tr(activity, "Ingresa un correo válido.", "Enter a valid email address."));
+                    return;
+                }
+                submit.setEnabled(false);
+                status.setTextColor(UI_ACCENT);
+                status.setText(tr(activity, "Enviando registro…", "Submitting registration…"));
+                ServerProfile profile = serverProfile(activity);
+                EXECUTOR.execute(() -> {
+                    try {
+                        JSONObject body = new JSONObject();
+                        body.put("username", user);
+                        body.put("password", pass);
+                        if (!address.isEmpty()) body.put("email", address);
+                        request("POST", profile.apiBase + "/account/register", body.toString(), null, "application/json");
+                        MAIN.post(() -> {
+                            if (activity.isFinishing()) return;
+                            dialog.dismiss();
+                            Toast.makeText(activity, tr(activity,
+                                    address.isEmpty() ? "Cuenta registrada. Ya puedes iniciar sesión." : "Registro enviado. Revisa tu correo si el servidor solicita verificación.",
+                                    address.isEmpty() ? "Account registered. You can now sign in." : "Registration submitted. Check your email if the server requests verification."),
+                                    Toast.LENGTH_LONG).show();
+                        });
+                    }
+                    catch (Exception error) {
+                        Log.w(TAG, "Account registration failed", error);
+                        MAIN.post(() -> {
+                            submit.setEnabled(true);
+                            status.setTextColor(UI_ERROR);
+                            status.setText(humanAccountError(activity, error));
+                        });
+                    }
+                });
+            });
+        });
+        dialog.show();
+    }
+
+    private static void showPasswordRecoveryDialog(Activity activity) {
+        int pad = Math.max(16, Math.round(20f * activity.getResources().getDisplayMetrics().density));
+        LinearLayout form = new LinearLayout(activity);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(pad, pad / 2, pad, pad / 2);
+        form.setBackgroundColor(UI_BG);
+        form.addView(accountTitle(activity, "Recuperar contraseña", "Forgot password"));
+
+        TextView note = new TextView(activity);
+        note.setText(tr(activity,
+                "Ingresa el correo asociado a tu cuenta. El servidor enviará una contraseña temporal de un solo uso.",
+                "Enter the email associated with your account. The server will send a one-time temporary password."));
+        note.setTextColor(UI_SECONDARY);
+        note.setPadding(0, pad / 3, 0, pad / 4);
+        form.addView(note);
+        EditText email = accountInput(activity, "Correo electrónico", "Email", false);
+        email.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        form.addView(email);
+        TextView status = new TextView(activity);
+        status.setTextColor(UI_SECONDARY);
+        status.setTextSize(13f);
+        form.addView(status);
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setView(form)
+                .setNegativeButton(tr(activity, "Cancelar", "Cancel"), null)
+                .setPositiveButton(tr(activity, "Enviar contraseña temporal", "Send temporary password"), null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(UI_BG));
+            Button cancel = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+            Button submit = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            cancel.setTextColor(UI_ACCENT);
+            submit.setTextColor(UI_ACCENT);
+            submit.setOnClickListener(v -> {
+                String address = email.getText().toString().trim();
+                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(address).matches()) {
+                    status.setTextColor(UI_ERROR);
+                    status.setText(tr(activity, "Ingresa un correo válido.", "Enter a valid email address."));
+                    return;
+                }
+                submit.setEnabled(false);
+                status.setTextColor(UI_ACCENT);
+                status.setText(tr(activity, "Solicitando contraseña temporal…", "Requesting temporary password…"));
+                ServerProfile profile = serverProfile(activity);
+                EXECUTOR.execute(() -> {
+                    try {
+                        JSONObject body = new JSONObject();
+                        body.put("email", address);
+                        request("POST", profile.apiBase + "/account/otp", body.toString(), null, "application/json");
+                        MAIN.post(() -> {
+                            if (activity.isFinishing()) return;
+                            dialog.dismiss();
+                            Toast.makeText(activity, tr(activity,
+                                    "Solicitud enviada. Revisa tu correo para obtener la contraseña temporal.",
+                                    "Request sent. Check your email for the temporary password."), Toast.LENGTH_LONG).show();
+                        });
+                    }
+                    catch (Exception error) {
+                        Log.w(TAG, "Password recovery failed", error);
+                        MAIN.post(() -> {
+                            submit.setEnabled(true);
+                            status.setTextColor(UI_ERROR);
+                            status.setText(humanAccountError(activity, error));
+                        });
+                    }
+                });
+            });
+        });
+        dialog.show();
+    }
+
+    private static String humanAccountError(Context context, Exception error) {
+        String message = error.getMessage();
+        if (message == null || message.trim().isEmpty()) message = error.getClass().getSimpleName();
+        return tr(context, "No se pudo completar la solicitud: ", "Could not complete the request: ") + message;
+    }
+
+    private static boolean autoLoginEnabled(Context context) {
+        SharedPreferences preferences = prefs(context);
+        String key = credentialPreferenceKey(context, PREF_AUTO_LOGIN);
+        if (preferences.contains(key)) return preferences.getBoolean(key, false);
+        // v0.5.2 and older combined both settings; preserve that behavior once.
+        return preferences.getBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), false);
+    }
+
+    private static void saveCredentials(Context context, String username, String password, boolean automatic) {
         try {
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
             keyStore.load(null);
@@ -710,6 +1033,7 @@ public final class FusionFallRetrobution {
                     .putString(credentialPreferenceKey(context, PREF_USERNAME), username)
                     .putString(credentialPreferenceKey(context, PREF_PASSWORD_BLOB), blob)
                     .putBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), true)
+                    .putBoolean(credentialPreferenceKey(context, PREF_AUTO_LOGIN), automatic)
                     .apply();
         }
         catch (Exception e) {
@@ -748,7 +1072,8 @@ public final class FusionFallRetrobution {
         SharedPreferences prefs = prefs(context);
         SharedPreferences.Editor editor = prefs.edit()
                 .remove(credentialPreferenceKey(context, PREF_PASSWORD_BLOB))
-                .putBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), false);
+                .putBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), false)
+                .putBoolean(credentialPreferenceKey(context, PREF_AUTO_LOGIN), false);
         if (!keepUsername) editor.remove(credentialPreferenceKey(context, PREF_USERNAME));
         editor.apply();
     }
@@ -1059,6 +1384,14 @@ public final class FusionFallRetrobution {
         LinearLayout layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(pad, pad, pad, pad);
+        layout.setBackgroundColor(UI_BG);
+        TextView title = new TextView(activity);
+        title.setText(tr(activity, "Descargando ", "Downloading ") + update.tag);
+        title.setTextColor(UI_TEXT);
+        title.setTextSize(20f);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(0, 0, 0, pad / 2);
+        layout.addView(title);
         TextView status = new TextView(activity);
         status.setText(tr(activity, "Conectando con GitHub Releases…", "Connecting to GitHub Releases…"));
         status.setTextColor(UI_TEXT);
@@ -1072,12 +1405,12 @@ public final class FusionFallRetrobution {
         barLp.topMargin = pad / 2;
         layout.addView(bar, barLp);
         AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle(tr(activity, "Descargando ", "Downloading ") + update.tag)
                 .setView(layout)
                 .create();
         dialog.setCancelable(false);
         dialog.setCanceledOnTouchOutside(false);
         dialog.show();
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new ColorDrawable(UI_BG));
         return new UpdateProgress(activity, dialog, bar, status);
     }
 
@@ -1097,21 +1430,17 @@ public final class FusionFallRetrobution {
 
     private static void installVerifiedApk(Activity activity, File apk) {
         try {
+            prefs(activity).edit().putString(PREF_PENDING_UPDATE_APK, apk.getAbsolutePath()).apply();
             if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) {
                 Toast.makeText(activity, tr(activity,
-                        "Autoriza instalar actualizaciones y vuelve a pulsar Comprobar actualización.",
-                        "Allow app updates, then tap Check for updates again."), Toast.LENGTH_LONG).show();
+                        "Autoriza instalar actualizaciones y vuelve a la aplicación; el instalador se abrirá automáticamente.",
+                        "Allow app updates and return to the app; the installer will open automatically."), Toast.LENGTH_LONG).show();
                 Intent settings = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + activity.getPackageName()));
                 activity.startActivity(settings);
                 return;
             }
-            Uri uri = FileProvider.getUriForFile(activity,
-                    activity.getPackageName() + ".fusionfall.files", apk);
-            Intent install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(uri, "application/vnd.android.package-archive");
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            activity.startActivity(install);
+            launchPackageInstaller(activity, apk);
         }
         catch (Exception error) {
             Log.e(TAG, "Could not open Android package installer", error);
@@ -1119,6 +1448,51 @@ public final class FusionFallRetrobution {
                     "No se pudo abrir el instalador de Android.",
                     "Could not open the Android package installer."), Toast.LENGTH_LONG).show();
         }
+    }
+
+    public static void onMainActivityResume(Activity activity) {
+        if (activity == null || activity.isFinishing()) return;
+        String path = prefs(activity).getString(PREF_PENDING_UPDATE_APK, null);
+        if (path == null || path.trim().isEmpty()) return;
+        File apk = new File(path);
+        try {
+            File updates = new File(activity.getCacheDir(), "fusionfall-updates");
+            String allowed = updates.getCanonicalPath() + File.separator;
+            if (!apk.getCanonicalPath().startsWith(allowed) || !apk.isFile()) {
+                prefs(activity).edit().remove(PREF_PENDING_UPDATE_APK).apply();
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) return;
+            launchPackageInstaller(activity, apk);
+        }
+        catch (Exception error) {
+            Log.e(TAG, "Could not resume pending APK installation", error);
+            prefs(activity).edit().remove(PREF_PENDING_UPDATE_APK).apply();
+            Toast.makeText(activity, tr(activity,
+                    "No se pudo reanudar el instalador de Android.",
+                    "Could not resume the Android package installer."), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private static void launchPackageInstaller(Activity activity, File apk) throws Exception {
+        Uri uri = FileProvider.getUriForFile(activity,
+                activity.getPackageName() + ".fusionfall.files", apk);
+        Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+        install.setData(uri);
+        install.setClipData(ClipData.newRawUri("OpenFusion Android update", uri));
+        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        install.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+        if (install.resolveActivity(activity.getPackageManager()) == null) {
+            install = new Intent(Intent.ACTION_VIEW);
+            install.setDataAndType(uri, "application/vnd.android.package-archive");
+            install.setClipData(ClipData.newRawUri("OpenFusion Android update", uri));
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        }
+        if (install.resolveActivity(activity.getPackageManager()) == null) {
+            throw new IOException("Android package installer is unavailable");
+        }
+        prefs(activity).edit().remove(PREF_PENDING_UPDATE_APK).apply();
+        activity.startActivity(install);
     }
 
     public static void showAbout(Activity activity) {

@@ -1,4 +1,5 @@
 .build/
+.build-*/
 dist/
 build.log
 __pycache__/
