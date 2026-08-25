@@ -16,8 +16,8 @@ index 8721b6c..f7e27e2 100644
          targetSdkVersion 28
 -        versionCode 32
 -        versionName "11.2"
-+        versionCode 502
-+        versionName "0.5.2-beta"
++        versionCode 503
++        versionName "0.5.3-beta"
 +    }
 +
 +    def fusionFallSigningVars = [
@@ -121,9 +121,7 @@ index dd126b1..021deb5 100644
  import android.Manifest;
  import android.app.Activity;
  import android.content.Context;
-@@ -77,11 +78,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
-             int menuItemId = selectedMenuItemId > 0 ? selectedMenuItemId : (showShortcutsFirst ? R.id.menu_item_shortcuts : R.id.menu_item_containers);
- 
+@@ -79,7 +80,10 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
              actionBar.setHomeAsUpIndicator(R.drawable.icon_action_bar_menu);
              onNavigationItemSelected(navigationView.getMenu().findItem(menuItemId));
              navigationView.setCheckedItem(menuItemId);
@@ -135,9 +133,20 @@ index dd126b1..021deb5 100644
  
              int containerId = intent.getIntExtra("container_id", 0);
              String startPath = intent.getStringExtra("start_path");
-             if (containerId > 0 && startPath != null) {
-                 showFragment(new ContainerFileManagerFragment(containerId, startPath));
-@@ -98,10 +102,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
+@@ -89,6 +93,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
+         }
+     }
+ 
++    @Override
++    protected void onResume() {
++        super.onResume();
++        FusionFallRetrobution.onMainActivityResume(this);
++    }
++
+     @Override
+     protected void attachBaseContext(Context newBase) {
+         super.attachBaseContext(LocaleHelper.setSystemLocale(newBase));
+@@ -98,10 +108,11 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
      public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
          super.onRequestPermissionsResult(requestCode, permissions, grantResults);
          if (requestCode == PERMISSION_WRITE_EXTERNAL_STORAGE_REQUEST_CODE) {

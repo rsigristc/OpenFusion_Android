@@ -1,6 +1,6 @@
 # Server profiles
 
-OpenFusion Android v0.5.2 Beta includes two profile types:
+OpenFusion Android v0.5.3 Beta includes two profile types:
 
 - **FusionFall Retrobution** is the default, preconfigured profile.
 - **Custom server** accepts a display name and an HTTPS API base URL.
@@ -20,6 +20,15 @@ client:
 - `POST /auth` accepts a JSON username/password pair and returns a refresh token.
 - `POST /auth/session` accepts that bearer token and returns `session_token`.
 - `POST /cookie` accepts the session bearer token and returns a game cookie, username and expiry.
+
+The v0.5.3 login screen also uses these standard OpenFusion launcher endpoints when available:
+
+- `GET /status` returns `player_count` for the live server card.
+- `POST /account/register` accepts `username`, `password`, and an optional `email`.
+- `POST /account/otp` accepts `email` and requests a one-time temporary password.
+
+If one of these optional endpoints is unavailable, its matching status or account action reports
+the server error without affecting normal authentication and launch.
 
 The profile URL may include a path prefix, such as `https://example.org/fusionfall/api`. Query
 parameters, URL fragments, embedded usernames/passwords and non-HTTPS endpoints are rejected.

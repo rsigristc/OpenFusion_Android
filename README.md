@@ -1,6 +1,6 @@
 # OpenFusion Android
 
-> v0.5.2 Beta · Default server profile: **FusionFall Retrobution**
+> v0.5.3 Beta · Default server profile: **FusionFall Retrobution**
 
 [![License: LGPL v2.1 or later](https://img.shields.io/badge/License-LGPL_v2.1_or_later-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/rsigristc/OpenFusion_Android?include_prereleases)](https://github.com/rsigristc/OpenFusion_Android/releases)
@@ -10,11 +10,11 @@ OpenFusion Android is an open-source Android adaptation of FusionFall built on a
 touch and gamepad controls, Fold-aware HUD interaction, lifecycle recovery, diagnostics and
 verified in app updates.
 
-The source used to build v0.5.2 Beta and future APKs is visible directly in this repository.
+The source used to build v0.5.3 Beta and future APKs is visible directly in this repository.
 
 ## Server profiles
 
-v0.5.2 Beta keeps **FusionFall Retrobution** as the ready-to-use default profile and adds an
+v0.5.3 Beta keeps **FusionFall Retrobution** as the ready-to-use default profile and adds an
 HTTPS custom-server profile under **Settings → Server**. Custom servers must implement the
 documented launcher API contract; selecting an arbitrary OpenFusion server does not guarantee
 protocol compatibility.
@@ -47,13 +47,15 @@ Pinning the exact revision makes the patch deterministic and the resulting sourc
 
 - Native bilingual Android launcher and encrypted credentials using Android Keystore + AES-GCM.
 - Retrobution default profile plus configurable HTTPS server profiles with credential isolation.
+- Live server status, game version and online-player count from the OpenFusion endpoint API.
+- Separate remember-password and automatic-sign-in controls, plus registration and password recovery.
 - Touch movement, camera, attack, jump, target and native Nano HUD interaction.
 - Drag to aim while holding ATK.
 - Gamepad support and automatic touch-HUD behavior.
 - 30 / 45 / 60 FPS and unlocked performance profiles.
 - Live frametime, average FPS, minimum FPS, 1% low and stutter metrics.
 - Exportable diagnostics with credential and token redaction for bug tracking and compatibility issues.
-- Stable/Beta update channels with HTTPS, SHA-256 verification and visible progress.
+- Stable/Beta update channels with HTTPS, SHA-256 verification, visible progress and automatic installer resume.
 - Persistent Android signing identity for upgrade compatible releases.
 
 ## Building
