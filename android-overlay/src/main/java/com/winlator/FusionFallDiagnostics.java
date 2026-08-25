@@ -40,7 +40,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** v0.5.9 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
+/** v0.5.10 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
 public final class FusionFallDiagnostics {
     private static final Object LOCK = new Object();
     private static final int MAX_EVENTS = 160;
@@ -121,7 +121,7 @@ public final class FusionFallDiagnostics {
             try {
                 String report = buildReport(activity, true);
                 String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-                String filename = "OpenFusion-Android-v0.5.9-beta-" + stamp + ".txt";
+                String filename = "OpenFusion-Android-v0.5.10-beta-" + stamp + ".txt";
                 String location = saveToDownloads(activity, filename, report.getBytes(StandardCharsets.UTF_8));
                 recordEvent("diagnostic saved · " + location);
                 activity.runOnUiThread(() -> AppUtils.showToast(activity,
