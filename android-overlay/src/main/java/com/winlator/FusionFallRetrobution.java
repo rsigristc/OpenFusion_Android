@@ -29,6 +29,8 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.inputmethod.InputMethodManager;
@@ -72,10 +74,10 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * FusionFall Retrobution Android v0.5.1 Beta - Updater Validation.
+ * OpenFusion Android v0.5.2 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
- * Retrobution API authentication, retrieves the current build manifest, and then
+ * server API authentication, retrieves the current build manifest, and then
  * starts ffrunner.exe inside the embedded Winlator/Wine runtime.
  *
  * Session tokens and cookies are kept only in memory. When the user explicitly
@@ -84,17 +86,24 @@ import javax.crypto.spec.GCMParameterSpec;
  */
 public final class FusionFallRetrobution {
     private static final String TAG = "FusionFallRetrobution";
+    private static final String PREFS = "fusionfall_retrobution";
+    // Kept for in-place upgrades: changing this name would create a new Winlator container.
     private static final String CONTAINER_NAME = "FusionFall Retrobution";
-    private static final String API_HOST = "api.ffretrobution.net";
-    private static final String API_BASE = "https://" + API_HOST;
+    private static final String DEFAULT_SERVER_ID = "retrobution";
+    private static final String DEFAULT_SERVER_NAME = "FusionFall Retrobution";
+    private static final String DEFAULT_API_BASE = "https://api.ffretrobution.net";
+    private static final String PREF_SERVER_PROFILE = "server_profile";
+    private static final String PREF_CUSTOM_SERVER_NAME = "custom_server_name";
+    private static final String PREF_CUSTOM_API_BASE = "custom_api_base";
+    // Kept so existing encrypted Retrobution credentials remain readable after updating.
     private static final String CREDENTIAL_KEY_ALIAS = "fusionfall_retrobution_login_v1";
     private static final String PREF_USERNAME = "username";
     private static final String PREF_REMEMBER_LOGIN = "remember_login";
     private static final String PREF_PASSWORD_BLOB = "password_blob";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.1-beta";
-    public static final int APP_VERSION_CODE = 501;
+    public static final String APP_VERSION = "0.5.2-beta";
+    public static final int APP_VERSION_CODE = 502;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -117,6 +126,184 @@ public final class FusionFallRetrobution {
     private static final int UI_ERROR = Color.rgb(185, 28, 28);
 
     private FusionFallRetrobution() {}
+
+    private static final class ServerProfile {
+        final String id;
+        final String name;
+        final String apiBase;
+        final String apiEndpoint;
+
+        ServerProfile(String id, String name, String apiBase) throws IOException {
+            this.id = id;
+            this.name = name;
+            this.apiBase = normalizeApiBase(apiBase);
+            this.apiEndpoint = new URL(this.apiBase).getAuthority();
+        }
+
+        boolean isDefault() {
+            return DEFAULT_SERVER_ID.equals(id);
+        }
+    }
+
+    private static SharedPreferences prefs(Context context) {
+        return context.getSharedPreferences(PREFS, 0);
+    }
+
+    private static ServerProfile serverProfile(Context context) {
+        SharedPreferences preferences = prefs(context);
+        if ("custom".equals(preferences.getString(PREF_SERVER_PROFILE, DEFAULT_SERVER_ID))) {
+            String name = preferences.getString(PREF_CUSTOM_SERVER_NAME, "Custom OpenFusion server").trim();
+            String apiBase = preferences.getString(PREF_CUSTOM_API_BASE, DEFAULT_API_BASE);
+            try {
+                return new ServerProfile("custom", name.isEmpty() ? "Custom OpenFusion server" : name, apiBase);
+            }
+            catch (IOException error) {
+                Log.w(TAG, "Invalid saved custom server; using Retrobution", error);
+            }
+        }
+        try {
+            return new ServerProfile(DEFAULT_SERVER_ID, DEFAULT_SERVER_NAME, DEFAULT_API_BASE);
+        }
+        catch (IOException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private static String normalizeApiBase(String raw) throws IOException {
+        String value = raw == null ? "" : raw.trim();
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        URL url;
+        try {
+            url = new URL(value);
+        }
+        catch (Exception error) {
+            throw new IOException("Invalid server API URL", error);
+        }
+        if (!"https".equalsIgnoreCase(url.getProtocol())) throw new IOException("Server API must use HTTPS");
+        if (url.getHost() == null || url.getHost().trim().isEmpty()) throw new IOException("Server API host is missing");
+        if (url.getUserInfo() != null || url.getQuery() != null || url.getRef() != null) {
+            throw new IOException("Server API URL cannot contain credentials, query parameters or fragments");
+        }
+        return value;
+    }
+
+    private static String credentialPreferenceKey(Context context, String baseKey) {
+        ServerProfile profile = serverProfile(context);
+        if (profile.isDefault()) return baseKey;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(profile.apiBase.getBytes(StandardCharsets.UTF_8));
+            StringBuilder scope = new StringBuilder();
+            for (int i = 0; i < 8; i++) scope.append(String.format(Locale.US, "%02x", hash[i] & 0xff));
+            return "server_" + scope + "_" + baseKey;
+        }
+        catch (Exception error) {
+            throw new IllegalStateException("SHA-256 unavailable", error);
+        }
+    }
+
+    public static String serverSummary(Context context) {
+        ServerProfile profile = serverProfile(context);
+        return profile.name + " · " + profile.apiBase;
+    }
+
+    public static void showServerSettings(Activity activity, Runnable onSaved) {
+        if (activity == null || activity.isFinishing()) return;
+        SharedPreferences preferences = prefs(activity);
+        ServerProfile current = serverProfile(activity);
+        int pad = (int)(20 * activity.getResources().getDisplayMetrics().density);
+
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(pad, pad / 2, pad, pad / 4);
+        layout.setBackgroundColor(UI_BG);
+
+        TextView help = new TextView(activity);
+        help.setText(tr(activity,
+                "Retrobution permanece como perfil predeterminado. Un servidor personalizado debe implementar el contrato API documentado y usar HTTPS. Solo introduce credenciales en servidores de confianza.",
+                "Retrobution remains the default profile. A custom server must implement the documented API contract and use HTTPS. Only enter credentials for servers you trust."));
+        help.setTextColor(UI_SECONDARY);
+        help.setTextSize(13f);
+        help.setPadding(0, 0, 0, pad / 2);
+        layout.addView(help);
+
+        Spinner profile = new Spinner(activity);
+        String[] profiles = {"FusionFall Retrobution", tr(activity, "Servidor personalizado", "Custom server")};
+        ArrayAdapter<String> profileAdapter = new ArrayAdapter<>(activity,
+                android.R.layout.simple_spinner_item, profiles);
+        profileAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        profile.setAdapter(profileAdapter);
+        profile.setSelection(current.isDefault() ? 0 : 1);
+        layout.addView(profile);
+
+        EditText name = new EditText(activity);
+        name.setHint(tr(activity, "Nombre del servidor", "Server name"));
+        name.setSingleLine(true);
+        name.setText(preferences.getString(PREF_CUSTOM_SERVER_NAME, ""));
+        name.setTextColor(UI_TEXT);
+        name.setHintTextColor(UI_HINT);
+        layout.addView(name);
+
+        EditText api = new EditText(activity);
+        api.setHint("https://server.example/api");
+        api.setSingleLine(true);
+        api.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        api.setText(preferences.getString(PREF_CUSTOM_API_BASE, ""));
+        api.setTextColor(UI_TEXT);
+        api.setHintTextColor(UI_HINT);
+        layout.addView(api);
+
+        TextView error = new TextView(activity);
+        error.setTextColor(UI_ERROR);
+        error.setTextSize(13f);
+        error.setPadding(0, pad / 4, 0, 0);
+        layout.addView(error);
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+                .setTitle(tr(activity, "Perfil del servidor", "Server profile"))
+                .setView(layout)
+                .setNeutralButton(tr(activity, "Usar Retrobution", "Use Retrobution"), null)
+                .setNegativeButton(tr(activity, "Cancelar", "Cancel"), null)
+                .setPositiveButton(tr(activity, "Guardar", "Save"), null)
+                .create();
+        dialog.setOnShowListener(ignored -> {
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                preferences.edit().putString(PREF_SERVER_PROFILE, DEFAULT_SERVER_ID).apply();
+                FusionFallDiagnostics.recordEvent("server profile changed · Retrobution");
+                dialog.dismiss();
+                if (onSaved != null) onSaved.run();
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                if (profile.getSelectedItemPosition() == 0) {
+                    preferences.edit().putString(PREF_SERVER_PROFILE, DEFAULT_SERVER_ID).apply();
+                    FusionFallDiagnostics.recordEvent("server profile changed · Retrobution");
+                    dialog.dismiss();
+                    if (onSaved != null) onSaved.run();
+                    return;
+                }
+                String customName = name.getText().toString().trim();
+                String customApi;
+                try {
+                    if (customName.isEmpty()) throw new IOException(tr(activity,
+                            "Escribe un nombre para el servidor", "Enter a server name"));
+                    customApi = normalizeApiBase(api.getText().toString());
+                }
+                catch (IOException problem) {
+                    error.setText(problem.getMessage());
+                    return;
+                }
+                preferences.edit()
+                        .putString(PREF_SERVER_PROFILE, "custom")
+                        .putString(PREF_CUSTOM_SERVER_NAME, customName)
+                        .putString(PREF_CUSTOM_API_BASE, customApi)
+                        .apply();
+                FusionFallDiagnostics.recordEvent("server profile changed · " + customName);
+                dialog.dismiss();
+                if (onSaved != null) onSaved.run();
+            });
+        });
+        dialog.show();
+    }
 
     public static void startWhenReady(MainActivity activity) {
         if (activity == null || activity.isFinishing()) return;
@@ -150,7 +337,7 @@ public final class FusionFallRetrobution {
                 return;
             }
 
-            show(activity, "Preparando el contenedor de Retrobution…");
+            show(activity, "Preparando OpenFusion Android…");
             JSONObject data = new JSONObject();
             FusionFallMobileControls.LaunchConfig launchConfig = FusionFallMobileControls.getLaunchConfig(activity);
             data.put("name", CONTAINER_NAME);
@@ -162,7 +349,7 @@ public final class FusionFallRetrobution {
 
             manager.createContainerAsync(data, container -> {
                 if (container == null) {
-                    fail(activity, "No se pudo crear el contenedor de Retrobution.", null);
+                    fail(activity, "No se pudo crear el contenedor de OpenFusion Android.", null);
                     STARTED.set(false);
                     return;
                 }
@@ -171,7 +358,7 @@ public final class FusionFallRetrobution {
             });
         }
         catch (Exception e) {
-            fail(activity, "Error creando el contenedor de Retrobution.", e);
+            fail(activity, "Error creando el contenedor de OpenFusion Android.", e);
             STARTED.set(false);
         }
     }
@@ -185,7 +372,7 @@ public final class FusionFallRetrobution {
                 changed = true;
             }
 
-            boolean showHud = activity.getSharedPreferences("fusionfall_retrobution", 0)
+            boolean showHud = prefs(activity)
                     .getBoolean("show_performance_hud", false);
             try {
                 java.lang.reflect.Method setter;
@@ -267,7 +454,7 @@ public final class FusionFallRetrobution {
     }
 
     private static boolean isEnglish(Context context) {
-        return "en".equals(context.getSharedPreferences("fusionfall_retrobution", 0)
+        return "en".equals(prefs(context)
                 .getString(PREF_LANGUAGE, "es"));
     }
 
@@ -291,7 +478,7 @@ public final class FusionFallRetrobution {
         layout.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
 
         TextView title = new TextView(activity);
-        title.setText("FusionFall · Retrobution");
+        title.setText("OpenFusion Android");
         title.setTextSize(24f);
         title.setTextColor(UI_TEXT);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -300,7 +487,7 @@ public final class FusionFallRetrobution {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView server = new TextView(activity);
-        server.setText(API_HOST + "\n" + tr(activity, "FusionFall Retrobution Android v0.5.1 Beta", "FusionFall Retrobution Android v0.5.1 Beta"));
+        server.setText(serverSummary(activity) + "\nOpenFusion Android v" + APP_VERSION);
         server.setTextSize(14f);
         server.setTextColor(UI_SECONDARY);
         server.setPadding(0, pad / 4, 0, pad / 2);
@@ -317,9 +504,9 @@ public final class FusionFallRetrobution {
         username.setClickable(true);
         username.setFocusable(true);
         username.setFocusableInTouchMode(true);
-        username.setContentDescription(tr(activity, "Usuario de Retrobution", "Retrobution username"));
-        SharedPreferences prefs = activity.getSharedPreferences("fusionfall_retrobution", 0);
-        username.setText(prefs.getString(PREF_USERNAME, ""));
+        username.setContentDescription(tr(activity, "Usuario del servidor", "Server username"));
+        SharedPreferences prefs = prefs(activity);
+        username.setText(prefs.getString(credentialPreferenceKey(activity, PREF_USERNAME), ""));
         layout.addView(username, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -334,7 +521,7 @@ public final class FusionFallRetrobution {
         password.setClickable(true);
         password.setFocusable(true);
         password.setFocusableInTouchMode(true);
-        password.setContentDescription(tr(activity, "Contraseña de Retrobution", "Retrobution password"));
+        password.setContentDescription(tr(activity, "Contraseña del servidor", "Server password"));
         layout.addView(password, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -343,7 +530,7 @@ public final class FusionFallRetrobution {
         rememberLogin.setTextColor(UI_TEXT);
         rememberLogin.setTextSize(14f);
         String savedPassword = loadSavedPassword(activity);
-        boolean hasSavedLogin = prefs.getBoolean(PREF_REMEMBER_LOGIN, false) && savedPassword != null;
+        boolean hasSavedLogin = prefs.getBoolean(credentialPreferenceKey(activity, PREF_REMEMBER_LOGIN), false) && savedPassword != null;
         rememberLogin.setChecked(hasSavedLogin);
         if (hasSavedLogin) password.setText(savedPassword);
         rememberLogin.setContentDescription(tr(activity, "Recordar contraseña y activar inicio de sesión automático", "Remember password and enable automatic sign-in"));
@@ -353,7 +540,7 @@ public final class FusionFallRetrobution {
         });
 
         TextView status = new TextView(activity);
-        status.setText(tr(activity, "Listo para conectar con Retrobution.", "Ready to connect to Retrobution."));
+        status.setText(tr(activity, "Listo para conectar con el servidor.", "Ready to connect to the server."));
         status.setTextColor(UI_SECONDARY);
         status.setTextSize(14f);
         status.setPadding(0, pad / 2, 0, pad / 2);
@@ -403,7 +590,13 @@ public final class FusionFallRetrobution {
                     username.setHint(tr(activity, "Usuario", "Username"));
                     password.setHint(tr(activity, "Contraseña", "Password"));
                     rememberLogin.setText(tr(activity, "Recordar contraseña e iniciar sesión automáticamente", "Remember password and sign in automatically"));
-                    server.setText(API_HOST + "\nFusionFall Retrobution Android v0.5.1 Beta");
+                    server.setText(serverSummary(activity) + "\nOpenFusion Android v" + APP_VERSION);
+                    username.setText(prefs.getString(credentialPreferenceKey(activity, PREF_USERNAME), ""));
+                    String profilePassword = loadSavedPassword(activity);
+                    boolean profileRemembered = prefs.getBoolean(
+                            credentialPreferenceKey(activity, PREF_REMEMBER_LOGIN), false) && profilePassword != null;
+                    rememberLogin.setChecked(profileRemembered);
+                    password.setText(profileRemembered ? profilePassword : "");
                     settings.setText(tr(activity, "AJUSTES", "SETTINGS"));
                     exit.setText(tr(activity, "SALIR", "EXIT"));
                     if (!loginInFlight[0]) play.setText(tr(activity, "JUGAR", "PLAY"));
@@ -438,8 +631,8 @@ public final class FusionFallRetrobution {
                 username.setEnabled(true);
                 password.setEnabled(true);
                 status.setTextColor(UI_ACCENT);
-                status.setText(tr(activity, "Autenticando con Retrobution…", "Authenticating with Retrobution…"));
-                prefs.edit().putString(PREF_USERNAME, user).apply();
+                status.setText(tr(activity, "Autenticando con el servidor…", "Authenticating with the server…"));
+                prefs.edit().putString(credentialPreferenceKey(activity, PREF_USERNAME), user).apply();
 
                 EXECUTOR.execute(() -> {
                     try {
@@ -455,7 +648,7 @@ public final class FusionFallRetrobution {
                         });
                     }
                     catch (Exception e) {
-                        Log.e(TAG, "Retrobution login/launch preparation failed", e);
+                        Log.e(TAG, "Server login/launch preparation failed", e);
                         MAIN.post(() -> {
                             loginInFlight[0] = false;
                             play.setEnabled(true);
@@ -513,22 +706,22 @@ public final class FusionFallRetrobution {
             byte[] encrypted = cipher.doFinal(password.getBytes(StandardCharsets.UTF_8));
             String blob = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + "." +
                     Base64.encodeToString(encrypted, Base64.NO_WRAP);
-            context.getSharedPreferences("fusionfall_retrobution", 0).edit()
-                    .putString(PREF_USERNAME, username)
-                    .putString(PREF_PASSWORD_BLOB, blob)
-                    .putBoolean(PREF_REMEMBER_LOGIN, true)
+            prefs(context).edit()
+                    .putString(credentialPreferenceKey(context, PREF_USERNAME), username)
+                    .putString(credentialPreferenceKey(context, PREF_PASSWORD_BLOB), blob)
+                    .putBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), true)
                     .apply();
         }
         catch (Exception e) {
-            Log.w(TAG, "Could not securely store Retrobution credentials", e);
+            Log.w(TAG, "Could not securely store server credentials", e);
         }
     }
 
     private static String loadSavedPassword(Context context) {
         try {
-            SharedPreferences prefs = context.getSharedPreferences("fusionfall_retrobution", 0);
-            if (!prefs.getBoolean(PREF_REMEMBER_LOGIN, false)) return null;
-            String blob = prefs.getString(PREF_PASSWORD_BLOB, null);
+            SharedPreferences prefs = prefs(context);
+            if (!prefs.getBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), false)) return null;
+            String blob = prefs.getString(credentialPreferenceKey(context, PREF_PASSWORD_BLOB), null);
             if (blob == null || !blob.contains(".")) return null;
             String[] parts = blob.split("\\.", 2);
             if (parts.length != 2) return null;
@@ -545,18 +738,18 @@ public final class FusionFallRetrobution {
             return new String(cipher.doFinal(encrypted), StandardCharsets.UTF_8);
         }
         catch (Exception e) {
-            Log.w(TAG, "Could not load saved Retrobution credentials", e);
+            Log.w(TAG, "Could not load saved server credentials", e);
             clearSavedCredentials(context, true);
             return null;
         }
     }
 
     private static void clearSavedCredentials(Context context, boolean keepUsername) {
-        SharedPreferences prefs = context.getSharedPreferences("fusionfall_retrobution", 0);
+        SharedPreferences prefs = prefs(context);
         SharedPreferences.Editor editor = prefs.edit()
-                .remove(PREF_PASSWORD_BLOB)
-                .putBoolean(PREF_REMEMBER_LOGIN, false);
-        if (!keepUsername) editor.remove(PREF_USERNAME);
+                .remove(credentialPreferenceKey(context, PREF_PASSWORD_BLOB))
+                .putBoolean(credentialPreferenceKey(context, PREF_REMEMBER_LOGIN), false);
+        if (!keepUsername) editor.remove(credentialPreferenceKey(context, PREF_USERNAME));
         editor.apply();
     }
 
@@ -570,8 +763,10 @@ public final class FusionFallRetrobution {
     }
 
     private static LaunchData authenticateAndPrepare(MainActivity activity, String username, String password, Container container) throws Exception {
-        JSONObject info = getJson(API_BASE + "/");
-        String serverName = info.optString("server_name", "Retrobution");
+        ServerProfile profile = serverProfile(activity);
+        String apiBase = profile.apiBase;
+        JSONObject info = getJson(apiBase + "/");
+        String serverName = info.optString("server_name", profile.name);
         String loginAddress = info.getString("login_address");
         boolean customLoadingScreen = info.optBoolean("custom_loading_screen", false);
 
@@ -579,14 +774,14 @@ public final class FusionFallRetrobution {
         JSONArray versions = info.optJSONArray("game_versions");
         if (versions != null && versions.length() > 0) versionUuid = versions.getString(0);
         if (versionUuid == null || versionUuid.isEmpty()) versionUuid = info.optString("game_version", "");
-        if (versionUuid.isEmpty()) throw new IOException("Retrobution no informó una versión de juego activa");
+        if (versionUuid.isEmpty()) throw new IOException("El servidor no informó una versión de juego activa");
 
         JSONObject version;
         try {
-            version = getJson(API_BASE + "/versions/" + versionUuid);
+            version = getJson(apiBase + "/versions/" + versionUuid);
         }
         catch (IOException first) {
-            version = getJson(API_BASE + "/versions/" + versionUuid + ".json");
+            version = getJson(apiBase + "/versions/" + versionUuid + ".json");
         }
 
         String assetUrl = version.getString("asset_url");
@@ -597,18 +792,18 @@ public final class FusionFallRetrobution {
         JSONObject auth = new JSONObject();
         auth.put("username", username);
         auth.put("password", password);
-        String refreshToken = request("POST", API_BASE + "/auth", auth.toString(), null, "application/json").trim();
-        if (refreshToken.isEmpty()) throw new IOException("Retrobution devolvió un token de autenticación vacío");
+        String refreshToken = request("POST", apiBase + "/auth", auth.toString(), null, "application/json").trim();
+        if (refreshToken.isEmpty()) throw new IOException("El servidor devolvió un token de autenticación vacío");
 
-        JSONObject session = new JSONObject(request("POST", API_BASE + "/auth/session", null, refreshToken, null));
+        JSONObject session = new JSONObject(request("POST", apiBase + "/auth/session", null, refreshToken, null));
         String sessionToken = session.getString("session_token");
 
-        JSONObject cookieJson = new JSONObject(request("POST", API_BASE + "/cookie", null, sessionToken, null));
+        JSONObject cookieJson = new JSONObject(request("POST", apiBase + "/cookie", null, sessionToken, null));
         String cookie = cookieJson.getString("cookie");
         String cookieUser = cookieJson.optString("username", session.optString("username", username));
         long expires = cookieJson.optLong("expires", Long.MAX_VALUE);
         if (expires < System.currentTimeMillis() / 1000L) {
-            throw new IOException("La cookie de Retrobution expiró; revisa la hora del dispositivo");
+            throw new IOException("La cookie del servidor expiró; revisa la hora del dispositivo");
         }
 
         String resolvedLogin = resolveAddress(loginAddress);
@@ -631,7 +826,7 @@ public final class FusionFallRetrobution {
         appendArg(args, "-n", serverName);
         appendArg(args, "-u", cookieUser);
         appendArg(args, "-t", cookie);
-        appendArg(args, "-e", API_HOST);
+        appendArg(args, "-e", profile.apiEndpoint);
         appendArg(args, "--width", Integer.toString(launchConfig.width));
         appendArg(args, "--height", Integer.toString(launchConfig.height));
         if (customLoadingScreen) args.append(" --loader-images");
@@ -705,7 +900,7 @@ public final class FusionFallRetrobution {
                 Toast.LENGTH_SHORT).show();
         EXECUTOR.execute(() -> {
             try {
-                String channel = activity.getSharedPreferences("fusionfall_retrobution", 0)
+                String channel = prefs(activity)
                         .getString(PREF_UPDATE_CHANNEL, "beta");
                 UpdateInfo update = fetchLatestRelease(channel);
                 MAIN.post(() -> {
@@ -791,7 +986,7 @@ public final class FusionFallRetrobution {
                 if (!expected.matches("[0-9a-f]{64}")) throw new IOException("Invalid SHA-256 manifest");
                 File directory = new File(activity.getCacheDir(), "fusionfall-updates");
                 if (!directory.exists() && !directory.mkdirs()) throw new IOException("Could not create update cache");
-                File apk = new File(directory, "FusionFall-Retrobution-" + update.tag + ".apk");
+                File apk = new File(directory, "OpenFusion-Android-" + update.tag + ".apk");
                 download(update.apkUrl, apk, (downloaded, total) ->
                         MAIN.post(() -> progress.setDownload(downloaded, total)));
                 MAIN.post(progress::setVerifying);
@@ -887,7 +1082,17 @@ public final class FusionFallRetrobution {
     }
 
     private static void enforceHttps(String value) throws IOException {
-        if (value == null || !value.startsWith("https://")) throw new IOException("HTTPS required");
+        try {
+            if (value == null || !"https".equalsIgnoreCase(new URL(value).getProtocol())) {
+                throw new IOException("HTTPS required");
+            }
+        }
+        catch (IOException error) {
+            throw error;
+        }
+        catch (Exception error) {
+            throw new IOException("Invalid HTTPS URL", error);
+        }
     }
 
     private static void installVerifiedApk(Activity activity, File apk) {
@@ -918,14 +1123,14 @@ public final class FusionFallRetrobution {
 
     public static void showAbout(Activity activity) {
         if (activity == null || activity.isFinishing()) return;
-        String message = "FusionFall Retrobution Android\nv" + APP_VERSION +
+        String message = "OpenFusion Android\nv" + APP_VERSION +
                 " (" + APP_VERSION_CODE + ")\n\n" + tr(activity,
-                "Proyecto comunitario no oficial para preservación y accesibilidad.\n\n" +
+                "Cliente Android comunitario no oficial con perfiles de servidor configurables. Retrobution es el perfil predeterminado.\n\n" +
                         "Créditos: OpenFusion, Retrobution y Winlator.\n\n" +
                         "FusionFall y sus propiedades pertenecen a sus respectivos propietarios. " +
                         "Este proyecto no está afiliado ni respaldado por Cartoon Network.\n\n" +
                         "Las licencias y avisos de los proyectos base se conservan en sus repositorios oficiales.",
-                "Unofficial community project for preservation and accessibility.\n\n" +
+                "Unofficial community Android client with configurable server profiles. Retrobution is the default profile.\n\n" +
                         "Credits: OpenFusion, Retrobution and Winlator.\n\n" +
                         "FusionFall and related properties belong to their respective owners. " +
                         "This project is not affiliated with or endorsed by Cartoon Network.\n\n" +
@@ -959,11 +1164,13 @@ public final class FusionFallRetrobution {
     }
 
     private static String request(String method, String url, String body, String bearer, String contentType) throws IOException {
+        enforceHttps(url);
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(25000);
+        conn.setInstanceFollowRedirects(false);
         conn.setRequestMethod(method);
-        conn.setRequestProperty("User-Agent", "FusionFall-Retrobution-Android/0.5.1-beta");
+        conn.setRequestProperty("User-Agent", "OpenFusion-Android/" + APP_VERSION);
         conn.setRequestProperty("Accept", "application/json, text/plain, */*");
         if (bearer != null && !bearer.isEmpty()) conn.setRequestProperty("Authorization", "Bearer " + bearer);
 
@@ -1023,7 +1230,7 @@ public final class FusionFallRetrobution {
             HttpURLConnection conn = (HttpURLConnection) current.openConnection();
             conn.setConnectTimeout(30000);
             conn.setReadTimeout(120000);
-            conn.setRequestProperty("User-Agent", "FusionFall-Retrobution-Android/0.5.1-beta");
+            conn.setRequestProperty("User-Agent", "OpenFusion-Android/" + APP_VERSION);
             conn.setInstanceFollowRedirects(false);
             int code = conn.getResponseCode();
             if (code >= 300 && code < 400) {
@@ -1130,7 +1337,7 @@ public final class FusionFallRetrobution {
             String json = "{\n" +
                     "  \"source\": \"" + OPENFUSION_PORTABLE_URL + "\",\n" +
                     "  \"sha256\": \"" + sha256(zip) + "\",\n" +
-                    "  \"launcher\": \"android-native-retrobution\"\n" +
+                    "  \"launcher\": \"android-native-openfusion\"\n" +
                     "}\n";
             try (FileOutputStream fos = new FileOutputStream(new File(installDir, "fusionfall-android-runtime.json"))) {
                 fos.write(json.getBytes(StandardCharsets.UTF_8));
