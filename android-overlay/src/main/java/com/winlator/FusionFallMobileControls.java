@@ -42,7 +42,7 @@ import java.util.WeakHashMap;
 import java.util.Locale;
 
 /**
- * v0.5.1 Beta Android updater-validation, diagnostics and controls layer for FusionFall Retrobution.
+ * v0.5.2 Beta Android controls and lifecycle layer for OpenFusion Android.
  *
  * The Windows/Unity client is untouched. This class sits above XServerView and
  * converts Android touch/gamepad input to the keyboard/mouse events the legacy
@@ -925,7 +925,7 @@ public final class FusionFallMobileControls {
             applySavedOffset(activity, joystick, "joystick");
         }
 
-        // POC4.9.1 HUD personalization: every Retrobution action can live either
+        // POC4.9.1 HUD personalization: every mobile action can live either
         // as a permanent draggable button or inside the compact ⋯ menu. During
         // edit mode all configurable buttons are temporarily shown.
         int hudClearance = baseBottom + dp(activity, 94f * scale);
@@ -1362,7 +1362,7 @@ public final class FusionFallMobileControls {
         int gameWidth = Math.max(1, hudRight - hudLeft);
         int gameHeight = Math.max(1, hudBottom - hudTop);
 
-        // Retrobution's three equipped Nano caps sit at the extreme lower right
+        // The three equipped Nano caps sit at the extreme lower right
         // of the 16:9 game viewport. Ratios keep the hotspots aligned across the
         // 960x540 / 1280x720 / 1600x900 profiles and letterboxed Android screens.
         int slotWidth = Math.max(54, Math.round(gameWidth * 0.060f));
@@ -2097,7 +2097,7 @@ public final class FusionFallMobileControls {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(activity);
-        title.setText("FusionFall Retrobution · v0.5.1 Beta");
+        title.setText("OpenFusion Android · v0.5.2 Beta");
         title.setTextSize(22f);
         title.setTextColor(UI_TEXT);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
@@ -2106,19 +2106,32 @@ public final class FusionFallMobileControls {
 
         TextView note = new TextView(activity);
         note.setText(tr(activity,
-                "Canales Stable/Beta, actualización verificada, diagnóstico exportable y controles móviles estables.",
-                "Stable/Beta channels, verified updates, exportable diagnostics and stable mobile controls."));
+                "Perfiles de servidor, actualizaciones verificadas, diagnóstico exportable y controles móviles estables.",
+                "Server profiles, verified updates, exportable diagnostics and stable mobile controls."));
         note.setTextSize(14f);
         note.setTextColor(UI_SECONDARY);
         note.setPadding(0, 0, 0, dp(activity, 16f));
         layout.addView(note);
 
+        layout.addView(sectionLabel(activity, tr(activity, "Servidor", "Server")));
+        TextView serverSummary = new TextView(activity);
+        serverSummary.setText(FusionFallRetrobution.serverSummary(activity));
+        serverSummary.setTextSize(14f);
+        serverSummary.setTextColor(UI_SECONDARY);
+        serverSummary.setPadding(0, 0, 0, dp(activity, 6f));
+        layout.addView(serverSummary);
+        TextView configureServer = makeButton(activity,
+                tr(activity, "CONFIGURAR SERVIDOR", "CONFIGURE SERVER"), 220f, 42f, 0.90f);
+        configureServer.setOnClickListener(v -> FusionFallRetrobution.showServerSettings(activity,
+                () -> serverSummary.setText(FusionFallRetrobution.serverSummary(activity))));
+        layout.addView(configureServer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(activity, 42f)));
 
         layout.addView(sectionLabel(activity, tr(activity, "Idioma / Language", "Language / Idioma")));
         TextView languageHelp = new TextView(activity);
         languageHelp.setText(tr(activity,
-                "Selecciona el idioma de la interfaz Android de Retrobution. El juego de FusionFall conserva su idioma original.",
-                "Select the language for the Retrobution Android interface. FusionFall itself keeps its original game language."));
+                "Selecciona el idioma de la interfaz de OpenFusion Android. FusionFall conserva su idioma original.",
+                "Select the OpenFusion Android interface language. FusionFall itself keeps its original game language."));
         languageHelp.setTextSize(13f);
         languageHelp.setTextColor(UI_SECONDARY);
         languageHelp.setPadding(0, 0, 0, dp(activity, 4f));

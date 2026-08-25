@@ -1,6 +1,6 @@
 # OpenFusion Android
 
-> Current beta profile: **FusionFall Retrobution**
+> v0.5.2 Beta · Default server profile: **FusionFall Retrobution**
 
 [![License: LGPL v2.1 or later](https://img.shields.io/badge/License-LGPL_v2.1_or_later-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/rsigristc/OpenFusion_Android?include_prereleases)](https://github.com/rsigristc/OpenFusion_Android/releases)
@@ -10,18 +10,22 @@ OpenFusion Android is an open-source Android adaptation of FusionFall built on a
 touch and gamepad controls, Fold-aware HUD interaction, lifecycle recovery, diagnostics and
 verified in app updates.
 
-The source used to build v0.5.1 Beta and future APKs is visible directly in this repository.
+The source used to build v0.5.2 Beta and future APKs is visible directly in this repository.
 
-## Server scope
+## Server profiles
 
-The current beta is configured specifically for **FusionFall Retrobution** at
-`api.ffretrobution.net`. Its login and game-version discovery use Retrobution's API contract,
-so the current APK is not a drop-in client for every OpenFusion server.
+v0.5.2 Beta keeps **FusionFall Retrobution** as the ready-to-use default profile and adds an
+HTTPS custom-server profile under **Settings → Server**. Custom servers must implement the
+documented launcher API contract; selecting an arbitrary OpenFusion server does not guarantee
+protocol compatibility.
 
-Most of the Android runtime, controls, HUD and diagnostics code is server independent and can
-be adapted to another server profile. Separating server configuration and authentication into
-replaceable profiles is a future goal. The Retrobution name remains in the current launcher
-class because that class presently contains Retrobution-specific integration.
+Credentials are encrypted and scoped to the selected API endpoint. Switching profiles cannot
+automatically reuse or send a saved password belonging to another server. See
+[Server profiles](docs/SERVER_PROFILES.md) for configuration and compatibility details.
+
+Some Java classes, preference names and Android authorities retain historical Retrobution or
+FusionFall names to preserve installed data and update compatibility. These are implementation
+identifiers rather than a server restriction; see [Compatibility identifiers](docs/COMPATIBILITY_IDENTIFIERS.md).
 
 ## Source layout
 
@@ -42,6 +46,7 @@ Pinning the exact revision makes the patch deterministic and the resulting sourc
 ## Current features
 
 - Native bilingual Android launcher and encrypted credentials using Android Keystore + AES-GCM.
+- Retrobution default profile plus configurable HTTPS server profiles with credential isolation.
 - Touch movement, camera, attack, jump, target and native Nano HUD interaction.
 - Drag to aim while holding ATK.
 - Gamepad support and automatic touch-HUD behavior.

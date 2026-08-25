@@ -29,8 +29,16 @@ the checksum alone—is the principal authenticity boundary.
 - Downloads remain in the app-private cache.
 - The APK SHA-256 is verified before the Android package installer is opened.
 - Installation is performed by Android; the application does not silently install packages.
-- Saved passwords use Android Keystore and AES-GCM.
+- Saved passwords use Android Keystore and AES-GCM and are isolated by server API endpoint.
 - Exported diagnostics redact detected credentials, tokens and authorization values.
+
+## Custom server profiles
+
+Custom profiles require HTTPS and reject URLs containing embedded credentials, query parameters
+or fragments. The selected server still receives the username and password entered for that
+profile, so users must only configure servers they trust. OpenFusion Android does not certify or
+endorse custom server operators. Changing endpoints changes the credential-storage scope and
+prevents automatic reuse of a password saved for a different server.
 
 ## Reporting a vulnerability
 

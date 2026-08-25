@@ -36,7 +36,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** v0.5.1 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
+/** v0.5.2 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
 public final class FusionFallDiagnostics {
     private static final Object LOCK = new Object();
     private static final int MAX_EVENTS = 160;
@@ -119,7 +119,7 @@ public final class FusionFallDiagnostics {
                 File directory = new File(activity.getCacheDir(), "fusionfall-diagnostics");
                 if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("Could not create diagnostics cache");
                 String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-                File file = new File(directory, "FusionFall-Retrobution-v0.5.1-beta-" + stamp + ".txt");
+                File file = new File(directory, "OpenFusion-Android-v0.5.2-beta-" + stamp + ".txt");
                 try (FileOutputStream output = new FileOutputStream(file)) {
                     output.write(report.getBytes(StandardCharsets.UTF_8));
                 }
@@ -140,7 +140,7 @@ public final class FusionFallDiagnostics {
             Intent send = new Intent(Intent.ACTION_SEND);
             send.setType("text/plain");
             send.putExtra(Intent.EXTRA_STREAM, uri);
-            send.putExtra(Intent.EXTRA_SUBJECT, "FusionFall Retrobution v0.5.1 Beta diagnostics");
+            send.putExtra(Intent.EXTRA_SUBJECT, "OpenFusion Android v0.5.2 Beta diagnostics");
             send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             recordEvent("diagnostic exported · " + file.getName());
             activity.startActivity(Intent.createChooser(send,
@@ -155,7 +155,7 @@ public final class FusionFallDiagnostics {
 
     private static String buildReport(Activity activity, boolean includeLogs) {
         StringBuilder out = new StringBuilder(32 * 1024);
-        out.append("FusionFall Retrobution Android Diagnostics\n");
+        out.append("OpenFusion Android Diagnostics\n");
         out.append("Generated: ").append(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(new Date())).append("\n\n");
 
         section(out, "Application");
@@ -165,6 +165,7 @@ public final class FusionFallDiagnostics {
             out.append("Version: ").append(info.versionName).append(" (").append(Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode).append(")\n");
         }
         catch (Throwable error) { out.append("Version: unavailable\n"); }
+        out.append("Server profile: ").append(FusionFallRetrobution.serverSummary(activity)).append('\n');
         out.append(FusionFallMobileControls.buildRuntimeDiagnostics(activity));
 
         section(out, "Android device");

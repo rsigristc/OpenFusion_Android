@@ -15,9 +15,9 @@ permissions:
 env:
   ANDROID_NDK: '24.0.8215888'
   ANDROID_CMAKE: '3.22.1'
-  APP_VERSION: '0.5.1-beta'
-  APP_VERSION_CODE: '501'
-  APK_BASENAME: 'FusionFall-Retrobution-v0.5.1-beta'
+  APP_VERSION: '0.5.2-beta'
+  APP_VERSION_CODE: '502'
+  APK_BASENAME: 'OpenFusion-Android-v0.5.2-beta'
 
 jobs:
   build:
