@@ -40,7 +40,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** v0.5.7 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
+/** v0.5.8 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
 public final class FusionFallDiagnostics {
     private static final Object LOCK = new Object();
     private static final int MAX_EVENTS = 160;
@@ -121,7 +121,7 @@ public final class FusionFallDiagnostics {
             try {
                 String report = buildReport(activity, true);
                 String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-                String filename = "OpenFusion-Android-v0.5.7-beta-" + stamp + ".txt";
+                String filename = "OpenFusion-Android-v0.5.8-beta-" + stamp + ".txt";
                 String location = saveToDownloads(activity, filename, report.getBytes(StandardCharsets.UTF_8));
                 recordEvent("diagnostic saved · " + location);
                 activity.runOnUiThread(() -> AppUtils.showToast(activity,
@@ -256,14 +256,15 @@ public final class FusionFallDiagnostics {
 
     private static void appendKnownLogs(Activity activity, StringBuilder out) {
         List<File> candidates = new ArrayList<>();
-        collectLogs(activity.getFilesDir(), candidates, 0);
-        collectLogs(activity.getCacheDir(), candidates, 0);
         try {
             for (Container container : new ContainerManager(activity).getContainers()) {
                 if ("FusionFall Retrobution".equals(container.getName()) ||
                         "FusionFall".equals(container.getName())) {
-                    collectLogs(new File(container.getRootDir(),
-                            ".wine/drive_c/OpenFusionRuntime"), candidates, 0);
+                    File runtimeDirectory = new File(container.getRootDir(),
+                            ".wine/drive_c/OpenFusionRuntime");
+                    File runnerLog = new File(runtimeDirectory, "ffrunner.log");
+                    if (runnerLog.isFile()) candidates.add(runnerLog);
+                    collectLogs(runtimeDirectory, candidates, 0);
                 }
             }
         }
@@ -271,6 +272,8 @@ public final class FusionFallDiagnostics {
             out.append("Could not inspect FusionFall runtime logs: ")
                     .append(error.getClass().getSimpleName()).append('\n');
         }
+        collectLogs(activity.getFilesDir(), candidates, 0);
+        collectLogs(activity.getCacheDir(), candidates, 0);
         if (candidates.isEmpty()) {
             out.append("No matching app-private logs found\n");
             return;
@@ -313,7 +316,8 @@ public final class FusionFallDiagnostics {
             if (file.isDirectory()) collectLogs(file, output, depth + 1);
             else {
                 String name = file.getName().toLowerCase(Locale.US);
-                if (name.endsWith(".log") || name.contains("wine") || name.contains("box64") || name.contains("xserver")) output.add(file);
+                if ((name.endsWith(".log") || name.endsWith(".trace")) &&
+                        !output.contains(file)) output.add(file);
             }
         }
     }
@@ -328,7 +332,15 @@ public final class FusionFallDiagnostics {
             }
             byte[] buffer = new byte[MAX_LOG_CHARS];
             int read = input.read(buffer);
-            if (read > 0) out.append(sanitize(new String(buffer, 0, read, StandardCharsets.UTF_8))).append('\n');
+            if (read > 0) {
+                for (int i = 0; i < read; i++) {
+                    if (buffer[i] == 0) {
+                        out.append("Skipped binary file\n");
+                        return;
+                    }
+                }
+                out.append(sanitize(new String(buffer, 0, read, StandardCharsets.UTF_8))).append('\n');
+            }
         }
         catch (Throwable error) { out.append("Unreadable: ").append(error.getClass().getSimpleName()).append('\n'); }
     }
