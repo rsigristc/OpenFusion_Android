@@ -42,7 +42,7 @@ import java.util.WeakHashMap;
 import java.util.Locale;
 
 /**
- * v0.5.5 Beta Android controls and lifecycle layer for OpenFusion Android.
+ * v0.5.6 Beta Android controls and lifecycle layer for OpenFusion Android.
  *
  * The Windows/Unity client is untouched. This class sits above XServerView and
  * converts Android touch/gamepad input to the keyboard/mouse events the legacy
@@ -2097,7 +2097,7 @@ public final class FusionFallMobileControls {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView title = new TextView(activity);
-        title.setText("OpenFusion Android · v0.5.5 Beta");
+        title.setText("OpenFusion Android · v0.5.6 Beta");
         title.setTextSize(22f);
         title.setTextColor(UI_TEXT);
         title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
