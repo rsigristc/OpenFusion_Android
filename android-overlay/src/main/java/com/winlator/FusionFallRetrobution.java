@@ -43,6 +43,7 @@ import com.winlator.container.Container;
 import com.winlator.container.ContainerManager;
 import com.winlator.container.DXWrappers;
 import com.winlator.container.GraphicsDrivers;
+import com.winlator.core.EnvVars;
 import com.winlator.core.GPUHelper;
 import com.winlator.xenvironment.RootFS;
 import com.winlator.xenvironment.RootFSInstaller;
@@ -79,7 +80,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.8 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.9 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -109,8 +110,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.8-beta";
-    public static final int APP_VERSION_CODE = 508;
+    public static final String APP_VERSION = "0.5.9-beta";
+    public static final int APP_VERSION_CODE = 509;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -351,7 +352,7 @@ public final class FusionFallRetrobution {
             FusionFallMobileControls.LaunchConfig launchConfig = FusionFallMobileControls.getLaunchConfig(activity);
             data.put("name", CONTAINER_NAME);
             data.put("screenSize", launchConfig.screenSize());
-            data.put("envVars", Container.DEFAULT_ENV_VARS + " MESA_EXTENSION_MAX_YEAR=2003");
+            data.put("envVars", Container.DEFAULT_ENV_VARS);
             data.put("wincomponents", Container.DEFAULT_WINCOMPONENTS);
             data.put("dxwrapper", Container.DEFAULT_DXWRAPPER);
             data.put("extraData", new JSONObject());
@@ -381,11 +382,12 @@ public final class FusionFallRetrobution {
                 changed = true;
             }
 
-            // The legacy Unity Web Player is more reliable through WineD3D/OpenGL
-            // on Mali and other non-Adreno GPUs. Keep the established Vulkan/DXVK
-            // path untouched on Adreno devices.
+            // Route Direct3D through WineD3D and Mesa Zink on Mali and other
+            // non-Adreno GPUs. Gladio renders Unity's alpha-only font atlas as
+            // opaque rectangles, while Zink exposes the texture format fixups
+            // WineD3D needs. Keep the established Vulkan/DXVK path on Adreno.
             if (GPUHelper.getAdrenoModelId(activity) <= 0) {
-                String compatibleDrivers = GraphicsDrivers.VORTEK + "," + GraphicsDrivers.GLADIO;
+                String compatibleDrivers = GraphicsDrivers.VORTEK + "," + GraphicsDrivers.ZINK;
                 if (!compatibleDrivers.equals(container.getGraphicsDriver())) {
                     container.setGraphicsDriver(compatibleDrivers);
                     changed = true;
@@ -393,6 +395,13 @@ public final class FusionFallRetrobution {
                 if (!DXWrappers.WINED3D.equals(container.getDXWrapper())) {
                     container.setDXWrapper(DXWrappers.WINED3D);
                     container.setDXWrapperConfig("");
+                    changed = true;
+                }
+
+                EnvVars compatibilityEnv = new EnvVars(container.getEnvVars());
+                if (compatibilityEnv.has("MESA_EXTENSION_MAX_YEAR")) {
+                    compatibilityEnv.remove("MESA_EXTENSION_MAX_YEAR");
+                    container.setEnvVars(compatibilityEnv.toString());
                     changed = true;
                 }
             }
