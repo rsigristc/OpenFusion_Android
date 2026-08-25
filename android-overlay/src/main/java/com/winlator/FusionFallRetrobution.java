@@ -4,10 +4,12 @@ package com.winlator;
 
 import android.app.AlertDialog;
 import android.app.Activity;
-import android.content.ClipData;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
@@ -36,8 +38,6 @@ import android.widget.ArrayAdapter;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.view.inputmethod.InputMethodManager;
-
-import androidx.core.content.FileProvider;
 
 import com.winlator.container.Container;
 import com.winlator.container.ContainerManager;
@@ -76,7 +76,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.5 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.6 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -106,8 +106,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.5-beta";
-    public static final int APP_VERSION_CODE = 505;
+    public static final String APP_VERSION = "0.5.6-beta";
+    public static final int APP_VERSION_CODE = 506;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -120,6 +120,7 @@ public final class FusionFallRetrobution {
     private static final ExecutorService STATUS_EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final AtomicBoolean STARTED = new AtomicBoolean(false);
+    private static final AtomicBoolean UPDATE_INSTALLING = new AtomicBoolean(false);
 
     // Explicit high contrast launcher palette. Do not inherit Winlator/System theme
     // colors because the host can use a dark text appearance on a light AlertDialog.
@@ -1450,7 +1451,7 @@ public final class FusionFallRetrobution {
                 activity.startActivity(settings);
                 return;
             }
-            launchPackageInstaller(activity, apk);
+            stagePackageInstallerSession(activity, apk);
         }
         catch (Exception error) {
             Log.e(TAG, "Could not open Android package installer", error);
@@ -1473,7 +1474,7 @@ public final class FusionFallRetrobution {
                 return;
             }
             if (Build.VERSION.SDK_INT >= 26 && !activity.getPackageManager().canRequestPackageInstalls()) return;
-            launchPackageInstaller(activity, apk);
+            stagePackageInstallerSession(activity, apk);
         }
         catch (Exception error) {
             Log.e(TAG, "Could not resume pending APK installation", error);
@@ -1484,25 +1485,67 @@ public final class FusionFallRetrobution {
         }
     }
 
-    private static void launchPackageInstaller(Activity activity, File apk) throws Exception {
-        Uri uri = FileProvider.getUriForFile(activity,
-                activity.getPackageName() + ".fusionfall.files", apk);
-        Intent install = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-        install.setData(uri);
-        install.setClipData(ClipData.newRawUri("OpenFusion Android update", uri));
-        install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        install.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-        if (install.resolveActivity(activity.getPackageManager()) == null) {
-            install = new Intent(Intent.ACTION_VIEW);
-            install.setDataAndType(uri, "application/vnd.android.package-archive");
-            install.setClipData(ClipData.newRawUri("OpenFusion Android update", uri));
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    private static void stagePackageInstallerSession(Activity activity, File apk) {
+        if (!UPDATE_INSTALLING.compareAndSet(false, true)) return;
+        Toast.makeText(activity, tr(activity,
+                "Preparando el instalador de Android…",
+                "Preparing the Android installer…"), Toast.LENGTH_LONG).show();
+        EXECUTOR.execute(() -> {
+            PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
+            int sessionId = -1;
+            try {
+                validateDownloadedPackage(activity, apk);
+                PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                        PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+                params.setAppPackageName(activity.getPackageName());
+                params.setSize(apk.length());
+                sessionId = installer.createSession(params);
+                try (PackageInstaller.Session session = installer.openSession(sessionId)) {
+                    try (FileInputStream input = new FileInputStream(apk);
+                         OutputStream output = session.openWrite("OpenFusion-Android.apk", 0L, apk.length())) {
+                        byte[] buffer = new byte[128 * 1024];
+                        int read;
+                        while ((read = input.read(buffer)) >= 0) output.write(buffer, 0, read);
+                        session.fsync(output);
+                    }
+                    Intent result = new Intent(activity, FusionFallUpdateReceiver.class)
+                            .setAction(FusionFallUpdateReceiver.ACTION_INSTALL_STATUS);
+                    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                    if (Build.VERSION.SDK_INT >= 31) flags |= PendingIntent.FLAG_MUTABLE;
+                    PendingIntent pending = PendingIntent.getBroadcast(activity, sessionId, result, flags);
+                    prefs(activity).edit().remove(PREF_PENDING_UPDATE_APK).apply();
+                    session.commit(pending.getIntentSender());
+                }
+                apk.delete();
+            }
+            catch (Exception error) {
+                Log.e(TAG, "Could not stage verified APK", error);
+                if (sessionId >= 0) {
+                    try { installer.abandonSession(sessionId); }
+                    catch (Exception ignored) {}
+                }
+                MAIN.post(() -> Toast.makeText(activity, tr(activity,
+                        "Android no pudo preparar el paquete verificado.",
+                        "Android could not prepare the verified package."), Toast.LENGTH_LONG).show());
+            }
+            finally {
+                UPDATE_INSTALLING.set(false);
+            }
+        });
+    }
+
+    private static void validateDownloadedPackage(Activity activity, File apk) throws Exception {
+        if (!apk.isFile() || apk.length() <= 0L) throw new IOException("Downloaded APK is missing or empty");
+        PackageInfo archive = activity.getPackageManager().getPackageArchiveInfo(apk.getAbsolutePath(), 0);
+        if (archive == null || !activity.getPackageName().equals(archive.packageName)) {
+            throw new IOException("Downloaded file is not an OpenFusion Android APK");
         }
-        if (install.resolveActivity(activity.getPackageManager()) == null) {
-            throw new IOException("Android package installer is unavailable");
+        PackageInfo installed = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
+        long archiveVersion = Build.VERSION.SDK_INT >= 28 ? archive.getLongVersionCode() : archive.versionCode;
+        long installedVersion = Build.VERSION.SDK_INT >= 28 ? installed.getLongVersionCode() : installed.versionCode;
+        if (archiveVersion <= installedVersion) {
+            throw new IOException("Downloaded APK version is not newer than the installed version");
         }
-        prefs(activity).edit().remove(PREF_PENDING_UPDATE_APK).apply();
-        activity.startActivity(install);
     }
 
     public static void showAbout(Activity activity) {
