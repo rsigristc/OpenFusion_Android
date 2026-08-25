@@ -76,7 +76,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.3 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.4 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -106,8 +106,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.3-beta";
-    public static final int APP_VERSION_CODE = 503;
+    public static final String APP_VERSION = "0.5.4-beta";
+    public static final int APP_VERSION_CODE = 504;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -1206,15 +1206,17 @@ public final class FusionFallRetrobution {
         final String pageUrl;
         final String apkUrl;
         final String checksumUrl;
+        final String expectedSha256;
 
         UpdateInfo(String tag, String name, String notes, String pageUrl,
-                   String apkUrl, String checksumUrl) {
+                   String apkUrl, String checksumUrl, String expectedSha256) {
             this.tag = tag;
             this.name = name;
             this.notes = notes;
             this.pageUrl = pageUrl;
             this.apkUrl = apkUrl;
             this.checksumUrl = checksumUrl;
+            this.expectedSha256 = expectedSha256;
         }
     }
 
@@ -1259,21 +1261,26 @@ public final class FusionFallRetrobution {
             if (!beta && release.optBoolean("prerelease", false)) continue;
             String apkUrl = null;
             String checksumUrl = null;
+            String expectedSha256 = null;
             JSONArray assets = release.optJSONArray("assets");
             if (assets != null) for (int j = 0; j < assets.length(); j++) {
                 JSONObject asset = assets.getJSONObject(j);
                 String assetName = asset.optString("name", "").toLowerCase(Locale.US);
                 String assetUrl = asset.optString("browser_download_url", "");
-                if (assetName.endsWith(".apk")) apkUrl = assetUrl;
+                if (assetName.endsWith(".apk")) {
+                    apkUrl = assetUrl;
+                    String digest = asset.optString("digest", "").toLowerCase(Locale.US);
+                    if (digest.startsWith("sha256:")) expectedSha256 = digest.substring("sha256:".length());
+                }
                 else if (assetName.endsWith(".apk.sha256")) checksumUrl = assetUrl;
             }
-            if (apkUrl == null || checksumUrl == null) continue;
+            if (apkUrl == null || (checksumUrl == null && expectedSha256 == null)) continue;
             return new UpdateInfo(
                     release.optString("tag_name", ""),
                     release.optString("name", release.optString("tag_name", "Update")),
                     release.optString("body", ""),
                     release.optString("html_url", PROJECT_URL + "/releases"),
-                    apkUrl, checksumUrl);
+                    apkUrl, checksumUrl, expectedSha256);
         }
         return null;
     }
@@ -1305,9 +1312,12 @@ public final class FusionFallRetrobution {
         EXECUTOR.execute(() -> {
             try {
                 enforceHttps(update.apkUrl);
-                enforceHttps(update.checksumUrl);
-                String checksumText = request("GET", update.checksumUrl, null, null, "text/plain").trim();
-                String expected = checksumText.split("\\s+", 2)[0].toLowerCase(Locale.US);
+                String expected = update.expectedSha256;
+                if (expected == null || expected.isEmpty()) {
+                    enforceHttps(update.checksumUrl);
+                    String checksumText = publicGetFollowingHttpsRedirects(update.checksumUrl, 4096).trim();
+                    expected = checksumText.split("\\s+", 2)[0].toLowerCase(Locale.US);
+                }
                 if (!expected.matches("[0-9a-f]{64}")) throw new IOException("Invalid SHA-256 manifest");
                 File directory = new File(activity.getCacheDir(), "fusionfall-updates");
                 if (!directory.exists() && !directory.mkdirs()) throw new IOException("Could not create update cache");
@@ -1568,6 +1578,49 @@ public final class FusionFallRetrobution {
             throw new IOException(msg.isEmpty() ? "HTTP " + code : msg);
         }
         return response;
+    }
+
+    private static String publicGetFollowingHttpsRedirects(String url, int maxBytes) throws IOException {
+        URL current = new URL(url);
+        for (int redirects = 0; redirects < 10; redirects++) {
+            if (!"https".equalsIgnoreCase(current.getProtocol())) throw new IOException("HTTPS required");
+            HttpURLConnection conn = (HttpURLConnection)current.openConnection();
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(25000);
+            conn.setInstanceFollowRedirects(false);
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "OpenFusion-Android/" + APP_VERSION);
+            conn.setRequestProperty("Accept", "text/plain, application/octet-stream");
+            try {
+                int code = conn.getResponseCode();
+                if (code >= 300 && code < 400) {
+                    String location = conn.getHeaderField("Location");
+                    if (location == null || location.trim().isEmpty()) {
+                        throw new IOException("Redirect without Location header");
+                    }
+                    current = new URL(current, location);
+                    continue;
+                }
+                if (code < 200 || code >= 300) throw new IOException("HTTP " + code);
+                long length = conn.getContentLengthLong();
+                if (length > maxBytes) throw new IOException("Response exceeds safe size limit");
+                try (InputStream in = conn.getInputStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[1024];
+                    int total = 0;
+                    int count;
+                    while ((count = in.read(buffer)) >= 0) {
+                        total += count;
+                        if (total > maxBytes) throw new IOException("Response exceeds safe size limit");
+                        out.write(buffer, 0, count);
+                    }
+                    return new String(out.toByteArray(), StandardCharsets.UTF_8);
+                }
+            }
+            finally {
+                conn.disconnect();
+            }
+        }
+        throw new IOException("Too many HTTPS redirects");
     }
 
     private static String readAll(InputStream input) throws IOException {
