@@ -79,7 +79,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.7 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.8 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -109,8 +109,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.7-beta";
-    public static final int APP_VERSION_CODE = 507;
+    public static final String APP_VERSION = "0.5.8-beta";
+    public static final int APP_VERSION_CODE = 508;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -1174,7 +1174,6 @@ public final class FusionFallRetrobution {
         appendArg(args, "-e", profile.apiEndpoint);
         appendArg(args, "--width", Integer.toString(launchConfig.width));
         appendArg(args, "--height", Integer.toString(launchConfig.height));
-        if (GPUHelper.getAdrenoModelId(activity) <= 0) args.append(" --force-opengl");
         if (customLoadingScreen) args.append(" --loader-images");
 
         String envVars = "UNITY_FF_CACHE_DIR=C:\\OpenFusionCache\\" + versionUuid;
