@@ -1,7 +1,7 @@
 # Compatibility identifiers
 
 The public product name is **OpenFusion Android**, but several internal identifiers intentionally
-retain historical names in v0.5.6 Beta:
+retain historical names in v0.5.7 Beta:
 
 - Android application ID `com.winlator` keeps official APK updates compatible.
 - The Winlator container name `FusionFall Retrobution` preserves the installed Wine container and

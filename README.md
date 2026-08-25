@@ -1,6 +1,6 @@
 # OpenFusion Android
 
-> v0.5.6 Beta · Default server profile: **FusionFall Retrobution**
+> v0.5.7 Beta · Default server profile: **FusionFall Retrobution**
 
 [![License: LGPL v2.1 or later](https://img.shields.io/badge/License-LGPL_v2.1_or_later-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/rsigristc/OpenFusion_Android?include_prereleases)](https://github.com/rsigristc/OpenFusion_Android/releases)
@@ -10,11 +10,11 @@ OpenFusion Android is an open-source Android adaptation of FusionFall built on a
 touch and gamepad controls, Fold-aware HUD interaction, lifecycle recovery, diagnostics and
 verified in app updates.
 
-The source used to build v0.5.6 Beta and future APKs is visible directly in this repository.
+The source used to build v0.5.7 Beta and future APKs is visible directly in this repository.
 
 ## Server profiles
 
-v0.5.6 Beta keeps **FusionFall Retrobution** as the ready-to-use default profile and adds an
+v0.5.7 Beta keeps **FusionFall Retrobution** as the ready-to-use default profile and adds an
 HTTPS custom-server profile under **Settings → Server**. Custom servers must implement the
 documented launcher API contract; selecting an arbitrary OpenFusion server does not guarantee
 protocol compatibility.
@@ -58,6 +58,8 @@ Pinning the exact revision makes the patch deterministic and the resulting sourc
 - Exportable diagnostics with credential and token redaction for bug tracking and compatibility issues.
 - Stable/Beta update channels with HTTPS, SHA-256 verification, visible progress and native PackageInstaller sessions.
 - Persistent Android signing identity for upgrade compatible releases.
+- Automatic WineD3D/OpenGL compatibility mode for Mali and other non-Adreno GPUs.
+- Diagnostic reports saved directly as `.txt` files under Downloads/OpenFusion Android.
 
 ## Building
 

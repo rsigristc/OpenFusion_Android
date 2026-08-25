@@ -5,29 +5,32 @@ package com.winlator;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
+import android.content.ContentValues;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.graphics.Color;
 import android.net.Uri;
 import android.opengl.GLES20;
 import android.os.Build;
+import android.os.Environment;
 import android.os.Process;
+import android.provider.MediaStore;
 import android.util.DisplayMetrics;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
-import androidx.core.content.FileProvider;
-
 import com.winlator.core.AppUtils;
+import com.winlator.container.Container;
+import com.winlator.container.ContainerManager;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
@@ -36,7 +39,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** v0.5.6 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
+/** v0.5.7 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
 public final class FusionFallDiagnostics {
     private static final Object LOCK = new Object();
     private static final int MAX_EVENTS = 160;
@@ -116,16 +119,14 @@ public final class FusionFallDiagnostics {
         new Thread(() -> {
             try {
                 String report = buildReport(activity, true);
-                File directory = new File(activity.getCacheDir(), "fusionfall-diagnostics");
-                if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("Could not create diagnostics cache");
                 String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-                File file = new File(directory, "OpenFusion-Android-v0.5.6-beta-" + stamp + ".txt");
-                try (FileOutputStream output = new FileOutputStream(file)) {
-                    output.write(report.getBytes(StandardCharsets.UTF_8));
-                }
-                activity.runOnUiThread(() -> shareFile(activity, file));
+                String filename = "OpenFusion-Android-v0.5.7-beta-" + stamp + ".txt";
+                String location = saveToDownloads(activity, filename, report.getBytes(StandardCharsets.UTF_8));
+                recordEvent("diagnostic saved · " + location);
+                activity.runOnUiThread(() -> AppUtils.showToast(activity,
+                        (isEnglish(activity) ? "Diagnostic saved in " : "Diagnóstico guardado en ") + location));
             }
-            catch (Throwable error) {
+            catch (Exception error) {
                 recordEvent("diagnostic export failed · " + error.getClass().getSimpleName());
                 activity.runOnUiThread(() -> AppUtils.showToast(activity,
                         isEnglish(activity) ? "Could not export diagnostic" : "No se pudo exportar el diagnóstico"));
@@ -133,24 +134,42 @@ public final class FusionFallDiagnostics {
         }, "FusionFallDiagnostics").start();
     }
 
-    private static void shareFile(Activity activity, File file) {
-        try {
-            Uri uri = FileProvider.getUriForFile(activity,
-                    activity.getPackageName() + ".fusionfall.files", file);
-            Intent send = new Intent(Intent.ACTION_SEND);
-            send.setType("text/plain");
-            send.putExtra(Intent.EXTRA_STREAM, uri);
-            send.putExtra(Intent.EXTRA_SUBJECT, "OpenFusion Android v0.5.6 Beta diagnostics");
-            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            recordEvent("diagnostic exported · " + file.getName());
-            activity.startActivity(Intent.createChooser(send,
-                    isEnglish(activity) ? "Share diagnostic" : "Compartir diagnóstico"));
+    private static String saveToDownloads(Activity activity, String filename, byte[] content) throws Exception {
+        String relative = Environment.DIRECTORY_DOWNLOADS + "/OpenFusion Android";
+        if (Build.VERSION.SDK_INT >= 29) {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
+            values.put(MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+            values.put(MediaStore.MediaColumns.RELATIVE_PATH, relative);
+            values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+            Uri uri = activity.getContentResolver().insert(
+                    MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+            if (uri == null) throw new IOException("Could not create Downloads entry");
+            try {
+                try (OutputStream output = activity.getContentResolver().openOutputStream(uri, "w")) {
+                    if (output == null) throw new IOException("Could not open Downloads entry");
+                    output.write(content);
+                }
+                values.clear();
+                values.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                activity.getContentResolver().update(uri, values, null, null);
+            }
+            catch (Exception error) {
+                activity.getContentResolver().delete(uri, null, null);
+                throw error;
+            }
         }
-        catch (Throwable error) {
-            recordEvent("diagnostic share failed · " + error.getClass().getSimpleName());
-            AppUtils.showToast(activity, isEnglish(activity) ?
-                    "Could not share diagnostic" : "No se pudo compartir el diagnóstico");
+        else {
+            File directory = new File(Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS), "OpenFusion Android");
+            if (!directory.exists() && !directory.mkdirs()) {
+                throw new IOException("Could not create Downloads directory");
+            }
+            try (FileOutputStream output = new FileOutputStream(new File(directory, filename))) {
+                output.write(content);
+            }
         }
+        return relative + "/" + filename;
     }
 
     private static String buildReport(Activity activity, boolean includeLogs) {
@@ -185,6 +204,7 @@ public final class FusionFallDiagnostics {
         out.append("GL vendor: ").append(glVendor).append('\n');
         out.append("GL renderer: ").append(glRenderer).append('\n');
         out.append("GL version: ").append(glVersion).append('\n');
+        appendContainerGraphics(activity, out);
 
         section(out, "Memory");
         appendMemory(activity, out);
@@ -237,6 +257,19 @@ public final class FusionFallDiagnostics {
         List<File> candidates = new ArrayList<>();
         collectLogs(activity.getFilesDir(), candidates, 0);
         collectLogs(activity.getCacheDir(), candidates, 0);
+        try {
+            for (Container container : new ContainerManager(activity).getContainers()) {
+                if ("FusionFall Retrobution".equals(container.getName()) ||
+                        "FusionFall".equals(container.getName())) {
+                    collectLogs(new File(container.getRootDir(),
+                            ".wine/drive_c/OpenFusionRuntime"), candidates, 0);
+                }
+            }
+        }
+        catch (Throwable error) {
+            out.append("Could not inspect FusionFall runtime logs: ")
+                    .append(error.getClass().getSimpleName()).append('\n');
+        }
         if (candidates.isEmpty()) {
             out.append("No matching app-private logs found\n");
             return;
@@ -246,6 +279,28 @@ public final class FusionFallDiagnostics {
             if (emitted++ >= MAX_LOG_FILES) break;
             out.append("\n--- ").append(file.getName()).append(" (last ").append(MAX_LOG_CHARS).append(" bytes) ---\n");
             appendTail(file, out);
+        }
+    }
+
+    private static void appendContainerGraphics(Activity activity, StringBuilder out) {
+        try {
+            for (Container container : new ContainerManager(activity).getContainers()) {
+                if ("FusionFall Retrobution".equals(container.getName()) ||
+                        "FusionFall".equals(container.getName())) {
+                    out.append("Container graphics driver: ").append(container.getGraphicsDriver()).append('\n');
+                    out.append("Container DX wrapper: ").append(container.getDXWrapper()).append('\n');
+                    File runtimeLog = new File(container.getRootDir(),
+                            ".wine/drive_c/OpenFusionRuntime/ffrunner.log");
+                    out.append("ffrunner.log: ").append(runtimeLog.isFile() ?
+                            runtimeLog.length() + " bytes" : "missing").append('\n');
+                    return;
+                }
+            }
+            out.append("Container graphics: unavailable\n");
+        }
+        catch (Throwable error) {
+            out.append("Container graphics: unavailable (")
+                    .append(error.getClass().getSimpleName()).append(")\n");
         }
     }
 
