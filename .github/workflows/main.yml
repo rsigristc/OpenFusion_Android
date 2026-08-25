@@ -15,9 +15,9 @@ permissions:
 env:
   ANDROID_NDK: '24.0.8215888'
   ANDROID_CMAKE: '3.22.1'
-  APP_VERSION: '0.5.4-beta'
-  APP_VERSION_CODE: '504'
-  APK_BASENAME: 'OpenFusion-Android-v0.5.4-beta'
+  APP_VERSION: '0.5.5-beta'
+  APP_VERSION_CODE: '505'
+  APK_BASENAME: 'OpenFusion-Android-v0.5.5-beta'
 
 jobs:
   build:
