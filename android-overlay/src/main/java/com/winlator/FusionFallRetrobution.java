@@ -83,7 +83,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.11 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.12 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -106,6 +106,9 @@ public final class FusionFallRetrobution {
     private static final String PREF_CUSTOM_API_BASE = "custom_api_base";
     private static final String PREF_LAST_LOGIN_ENDPOINT = "last_login_endpoint";
     private static final String PREF_LAST_SHARD_ENDPOINT = "last_shard_endpoint";
+    private static final String PREF_LAST_COOKIE_LENGTH = "last_cookie_length";
+    private static final String PREF_LAST_COOKIE_EXPIRES = "last_cookie_expires";
+    private static final String PREF_LAST_COOKIE_CREATED = "last_cookie_created";
     // Kept so existing encrypted Retrobution credentials remain readable after updating.
     private static final String CREDENTIAL_KEY_ALIAS = "fusionfall_retrobution_login_v1";
     private static final String PREF_USERNAME = "username";
@@ -115,8 +118,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.11-beta";
-    public static final int APP_VERSION_CODE = 511;
+    public static final String APP_VERSION = "0.5.12-beta";
+    public static final int APP_VERSION_CODE = 512;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -405,8 +408,8 @@ public final class FusionFallRetrobution {
                 // Old 32-bit Unity networking passes the shard session key across
                 // several threads. Avoid weak-memory optimizations while diagnosing
                 // unreliable login-to-shard hand-offs on the Mali compatibility path.
-                if (!Box64Preset.STABILITY.equals(container.getBox64Preset())) {
-                    container.setBox64Preset(Box64Preset.STABILITY);
+                if (!Box64Preset.CONSERVATIVE.equals(container.getBox64Preset())) {
+                    container.setBox64Preset(Box64Preset.CONSERVATIVE);
                     changed = true;
                 }
 
@@ -1171,6 +1174,12 @@ public final class FusionFallRetrobution {
         if (expires < System.currentTimeMillis() / 1000L) {
             throw new IOException("La cookie del servidor expiró; revisa la hora del dispositivo");
         }
+        prefs(activity).edit()
+                .putInt(PREF_LAST_COOKIE_LENGTH, cookie.length())
+                .putLong(PREF_LAST_COOKIE_EXPIRES, expires)
+                .putLong(PREF_LAST_COOKIE_CREATED, System.currentTimeMillis() / 1000L)
+                .apply();
+        FusionFallDiagnostics.recordEvent("secure game cookie prepared · " + cookie.length() + " chars");
 
         String resolvedLogin = resolveAddress(loginAddress);
         String resolvedShard = inferShardAddress(info, resolvedLogin);
@@ -1240,6 +1249,17 @@ public final class FusionFallRetrobution {
         StringBuilder result = new StringBuilder();
         result.append(probeEndpoint("Login", login));
         result.append(probeEndpoint("Shard (inferred)", shard));
+        int cookieLength = prefs(context).getInt(PREF_LAST_COOKIE_LENGTH, 0);
+        long cookieExpires = prefs(context).getLong(PREF_LAST_COOKIE_EXPIRES, 0L);
+        long cookieCreated = prefs(context).getLong(PREF_LAST_COOKIE_CREATED, 0L);
+        if (cookieLength > 0 && cookieExpires > 0L) {
+            long now = System.currentTimeMillis() / 1000L;
+            result.append("Secure cookie handoff: ").append(cookieLength).append(" chars · created ")
+                    .append(Math.max(0L, now - cookieCreated)).append(" s ago · ")
+                    .append(cookieExpires >= now ? "valid for " + (cookieExpires - now) + " s" :
+                            "expired " + (now - cookieExpires) + " s ago")
+                    .append('\n');
+        }
         return result.toString();
     }
 
