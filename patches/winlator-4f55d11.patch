@@ -16,8 +16,8 @@ index 8721b6c..f7e27e2 100644
          targetSdkVersion 28
 -        versionCode 32
 -        versionName "11.2"
-+        versionCode 510
-+        versionName "0.5.10-beta"
++        versionCode 511
++        versionName "0.5.11-beta"
 +    }
 +
 +    def fusionFallSigningVars = [

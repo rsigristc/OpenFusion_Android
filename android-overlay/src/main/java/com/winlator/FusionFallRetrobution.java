@@ -43,6 +43,7 @@ import com.winlator.container.Container;
 import com.winlator.container.ContainerManager;
 import com.winlator.container.DXWrappers;
 import com.winlator.container.GraphicsDrivers;
+import com.winlator.box64.Box64Preset;
 import com.winlator.core.EnvVars;
 import com.winlator.core.GPUHelper;
 import com.winlator.xenvironment.RootFS;
@@ -62,6 +63,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
@@ -80,7 +83,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 /**
- * OpenFusion Android v0.5.10 Beta launcher and server-profile integration.
+ * OpenFusion Android v0.5.11 Beta launcher and server-profile integration.
  *
  * WebView2/Tauri are deliberately not part of the launch chain. Android performs
  * server API authentication, retrieves the current build manifest, and then
@@ -101,6 +104,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_SERVER_PROFILE = "server_profile";
     private static final String PREF_CUSTOM_SERVER_NAME = "custom_server_name";
     private static final String PREF_CUSTOM_API_BASE = "custom_api_base";
+    private static final String PREF_LAST_LOGIN_ENDPOINT = "last_login_endpoint";
+    private static final String PREF_LAST_SHARD_ENDPOINT = "last_shard_endpoint";
     // Kept so existing encrypted Retrobution credentials remain readable after updating.
     private static final String CREDENTIAL_KEY_ALIAS = "fusionfall_retrobution_login_v1";
     private static final String PREF_USERNAME = "username";
@@ -110,8 +115,8 @@ public final class FusionFallRetrobution {
     private static final String PREF_PENDING_UPDATE_APK = "pending_update_apk";
     private static final String PREF_LANGUAGE = "ui_language";
     private static final String PREF_UPDATE_CHANNEL = "update_channel";
-    public static final String APP_VERSION = "0.5.10-beta";
-    public static final int APP_VERSION_CODE = 510;
+    public static final String APP_VERSION = "0.5.11-beta";
+    public static final int APP_VERSION_CODE = 511;
     private static final String RELEASES_API =
             "https://api.github.com/repos/rsigristc/OpenFusion_Android/releases";
     private static final String PROJECT_URL = "https://github.com/rsigristc/OpenFusion_Android";
@@ -395,6 +400,13 @@ public final class FusionFallRetrobution {
                 if (!DXWrappers.WINED3D.equals(container.getDXWrapper())) {
                     container.setDXWrapper(DXWrappers.WINED3D);
                     container.setDXWrapperConfig("");
+                    changed = true;
+                }
+                // Old 32-bit Unity networking passes the shard session key across
+                // several threads. Avoid weak-memory optimizations while diagnosing
+                // unreliable login-to-shard hand-offs on the Mali compatibility path.
+                if (!Box64Preset.STABILITY.equals(container.getBox64Preset())) {
+                    container.setBox64Preset(Box64Preset.STABILITY);
                     changed = true;
                 }
 
@@ -1161,6 +1173,11 @@ public final class FusionFallRetrobution {
         }
 
         String resolvedLogin = resolveAddress(loginAddress);
+        String resolvedShard = inferShardAddress(info, resolvedLogin);
+        prefs(activity).edit()
+                .putString(PREF_LAST_LOGIN_ENDPOINT, resolvedLogin)
+                .putString(PREF_LAST_SHARD_ENDPOINT, resolvedShard)
+                .apply();
         File cache = new File(container.getRootDir(), ".wine/drive_c/OpenFusionCache/" + versionUuid);
         if (!cache.mkdirs() && !cache.isDirectory()) {
             throw new IOException("No se pudo crear el cache local de FusionFall");
@@ -1197,6 +1214,52 @@ public final class FusionFallRetrobution {
         String port = address.substring(colon + 1);
         if (host.matches("\\d+\\.\\d+\\.\\d+\\.\\d+")) return address;
         return InetAddress.getByName(host).getHostAddress() + ":" + port;
+    }
+
+    private static String inferShardAddress(JSONObject info, String loginAddress) throws Exception {
+        String advertised = info.optString("shard_address", "").trim();
+        if (!advertised.isEmpty()) return resolveAddress(advertised);
+        int colon = loginAddress.lastIndexOf(':');
+        if (colon <= 0 || colon == loginAddress.length() - 1) return "";
+        int loginPort = Integer.parseInt(loginAddress.substring(colon + 1));
+        return loginAddress.substring(0, colon + 1) + (loginPort + 1);
+    }
+
+    /** Performs bounded, credential-free endpoint probes for exported diagnostics. */
+    static String buildNetworkDiagnostics(Context context) {
+        String login = prefs(context).getString(PREF_LAST_LOGIN_ENDPOINT, "");
+        String shard = prefs(context).getString(PREF_LAST_SHARD_ENDPOINT, "");
+        try {
+            JSONObject info = getJson(serverProfile(context).apiBase + "/");
+            login = resolveAddress(info.getString("login_address"));
+            shard = inferShardAddress(info, login);
+        }
+        catch (Exception error) {
+            if (login.isEmpty()) return "Endpoint discovery: failed (" + error.getClass().getSimpleName() + ")\n";
+        }
+        StringBuilder result = new StringBuilder();
+        result.append(probeEndpoint("Login", login));
+        result.append(probeEndpoint("Shard (inferred)", shard));
+        return result.toString();
+    }
+
+    private static String probeEndpoint(String label, String address) {
+        if (address == null || address.isEmpty()) return label + ": unavailable\n";
+        int colon = address.lastIndexOf(':');
+        if (colon <= 0 || colon == address.length() - 1) return label + ": invalid endpoint\n";
+        String host = address.substring(0, colon);
+        try {
+            int port = Integer.parseInt(address.substring(colon + 1));
+            long started = System.currentTimeMillis();
+            try (Socket socket = new Socket()) {
+                socket.connect(new InetSocketAddress(host, port), 2500);
+            }
+            return label + ": " + address + " · reachable · " +
+                    (System.currentTimeMillis() - started) + " ms\n";
+        }
+        catch (Exception error) {
+            return label + ": " + address + " · failed · " + error.getClass().getSimpleName() + "\n";
+        }
     }
 
     private static void appendArg(StringBuilder sb, String key, String value) {

@@ -40,7 +40,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
-/** v0.5.10 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
+/** v0.5.11 Beta bounded, privacy-conscious diagnostics for the Android compatibility layer. */
 public final class FusionFallDiagnostics {
     private static final Object LOCK = new Object();
     private static final int MAX_EVENTS = 160;
@@ -121,7 +121,7 @@ public final class FusionFallDiagnostics {
             try {
                 String report = buildReport(activity, true);
                 String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-                String filename = "OpenFusion-Android-v0.5.10-beta-" + stamp + ".txt";
+                String filename = "OpenFusion-Android-v0.5.11-beta-" + stamp + ".txt";
                 String location = saveToDownloads(activity, filename, report.getBytes(StandardCharsets.UTF_8));
                 recordEvent("diagnostic saved · " + location);
                 activity.runOnUiThread(() -> AppUtils.showToast(activity,
@@ -210,6 +210,11 @@ public final class FusionFallDiagnostics {
         section(out, "Memory");
         appendMemory(activity, out);
 
+        if (includeLogs) {
+            section(out, "Network endpoints");
+            out.append(FusionFallRetrobution.buildNetworkDiagnostics(activity));
+        }
+
         section(out, "Session events");
         synchronized (LOCK) {
             if (EVENTS.isEmpty()) out.append("No events recorded\n");
@@ -293,6 +298,7 @@ public final class FusionFallDiagnostics {
                         "FusionFall".equals(container.getName())) {
                     out.append("Container graphics driver: ").append(container.getGraphicsDriver()).append('\n');
                     out.append("Container DX wrapper: ").append(container.getDXWrapper()).append('\n');
+                    out.append("Container Box64 preset: ").append(container.getBox64Preset()).append('\n');
                     File runtimeLog = new File(container.getRootDir(),
                             ".wine/drive_c/OpenFusionRuntime/ffrunner.log");
                     out.append("ffrunner.log: ").append(runtimeLog.isFile() ?
